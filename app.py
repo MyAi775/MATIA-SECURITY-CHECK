@@ -7,25 +7,37 @@ from functools import wraps
 from html import escape
 from urllib.parse import urlparse
 
-from flask import Flask, request, redirect, session, url_for, render_template_string
+from flask import (
+    Flask,
+    request,
+    redirect,
+    session,
+    url_for,
+    render_template_string,
+    jsonify
+)
 
 # =========================================================
 # MATIA // SECURITY CHECK
-# FREE AUTHORIZED SECURITY ASSESSMENT PLATFORM
 # =========================================================
 
 app = Flask(__name__)
 
-# ---------------------------------------------------------
+# =========================================================
 # SECURITY CONFIG
-# ---------------------------------------------------------
+# =========================================================
 
-ADMIN_USER = os.environ["MATIA_ADMIN_USER"]
-ADMIN_PASSWORD = os.environ["MATIA_ADMIN_PASSWORD"]
-app.config["SECRET_KEY"] = os.environ["MATIA_SECRET_KEY"]
+ADMIN_USER = os.environ.get("MATIA_ADMIN_USER", "")
+ADMIN_PASSWORD = os.environ.get("MATIA_ADMIN_PASSWORD", "")
+app.config["SECRET_KEY"] = os.environ.get(
+    "MATIA_SECRET_KEY",
+    "CHANGE-ME-IN-RENDER"
+)
 
-DB_FILE = os.environ.get("DB_FILE", "matia_security.db")
-
+DB_FILE = os.environ.get(
+    "DB_FILE",
+    "matia_security.db"
+)
 
 # =========================================================
 # DATABASE
@@ -60,7 +72,9 @@ def init_db():
             request_id INTEGER NOT NULL,
             sender TEXT NOT NULL,
             message TEXT NOT NULL,
-            created TEXT NOT NULL
+            created TEXT NOT NULL,
+            read_by_client INTEGER NOT NULL DEFAULT 0,
+            read_by_admin INTEGER NOT NULL DEFAULT 0
         )
     """)
 
@@ -77,13 +91,35 @@ def init_db():
         )
     """)
 
+    # -----------------------------------------------------
+    # DATABASE MIGRATION FOR OLD DATABASES
+    # -----------------------------------------------------
+
+    columns = conn.execute(
+        "PRAGMA table_info(messages)"
+    ).fetchall()
+
+    column_names = {
+        row["name"] for row in columns
+    }
+
+    if "read_by_client" not in column_names:
+        conn.execute("""
+            ALTER TABLE messages
+            ADD COLUMN read_by_client INTEGER NOT NULL DEFAULT 0
+        """)
+
+    if "read_by_admin" not in column_names:
+        conn.execute("""
+            ALTER TABLE messages
+            ADD COLUMN read_by_admin INTEGER NOT NULL DEFAULT 0
+        """)
+
     conn.commit()
     conn.close()
 
 
-# IMPORTANT:
-# Render/Gunicorn imports "app", so this must run outside
-# if __name__ == "__main__":
+# Important for Render + Gunicorn
 init_db()
 
 
@@ -92,32 +128,49 @@ init_db()
 # =========================================================
 
 def now():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.now().strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+
+
+def e(value):
+    return escape(str(value))
 
 
 def admin_required(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
+
         if not session.get("admin"):
-            return redirect(url_for("admin_login"))
+            return redirect(
+                url_for("admin_login")
+            )
+
         return func(*args, **kwargs)
 
     return wrapper
 
 
 def get_request(request_id):
+
     conn = get_db()
 
     item = conn.execute(
-        "SELECT * FROM requests WHERE id = ?",
+        """
+        SELECT *
+        FROM requests
+        WHERE id = ?
+        """,
         (request_id,)
     ).fetchone()
 
     conn.close()
+
     return item
 
 
 def resolve_hostname(target):
+
     value = target.strip()
 
     if not value:
@@ -133,12 +186,14 @@ def resolve_hostname(target):
 
 
 def resolve_target_ip(target):
+
     hostname = resolve_hostname(target)
 
     if not hostname:
         return "IP NOT FOUND"
 
     try:
+
         results = socket.getaddrinfo(
             hostname,
             None,
@@ -149,12 +204,17 @@ def resolve_target_ip(target):
         ips = []
 
         for result in results:
+
             ip = result[4][0]
 
             if ip not in ips:
                 ips.append(ip)
 
-        return ", ".join(ips[:10]) if ips else "IP NOT FOUND"
+        return (
+            ", ".join(ips[:10])
+            if ips
+            else "IP NOT FOUND"
+        )
 
     except socket.gaierror:
         return "IP NOT FOUND"
@@ -163,15 +223,12 @@ def resolve_target_ip(target):
         return "IP LOOKUP ERROR"
 
 
-def e(value):
-    return escape(str(value))
-
-
 # =========================================================
-# HTML / STYLE
+# HTML
 # =========================================================
 
 STYLE = """
+
 <style>
 
 * {
@@ -286,25 +343,24 @@ a {
     background: #162532;
 }
 
-.grid {
-    display: grid;
-    grid-template-columns: repeat(
-        auto-fit,
-        minmax(220px, 1fr)
-    );
-    gap: 15px;
+.notification {
+    display: none;
+    background: #00eaff;
+    color: #031017;
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    font-weight: 900;
 }
 
-table {
-    width: 100%;
-    border-collapse: collapse;
+.notification.show {
+    display: block;
 }
 
-th,
-td {
-    text-align: left;
-    padding: 12px;
-    border-bottom: 1px solid #22313f;
+.chat-box {
+    max-height: 500px;
+    overflow-y: auto;
+    margin-bottom: 15px;
 }
 
 .message {
@@ -323,6 +379,12 @@ td {
     border-left-color: #4ade80;
 }
 
+.message-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+}
+
 pre {
     white-space: pre-wrap;
     font-family: Arial, sans-serif;
@@ -337,11 +399,44 @@ pre {
     margin-top: 10px;
 }
 
+.grid {
+    display: grid;
+    grid-template-columns:
+        repeat(auto-fit, minmax(220px, 1fr));
+    gap: 15px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th,
+td {
+    text-align: left;
+    padding: 12px;
+    border-bottom: 1px solid #22313f;
+}
+
+.small-badge {
+    display: inline-block;
+    min-width: 24px;
+    text-align: center;
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: #ff5757;
+    color: white;
+    font-size: 12px;
+    font-weight: 900;
+}
+
 </style>
+
 """
 
 
-def page(title, content):
+def page(title, content, scripts=""):
+
     return render_template_string(
         f"""
         <!DOCTYPE html>
@@ -353,12 +448,8 @@ def page(title, content):
 
             <meta
                 name="viewport"
-                content="width=device-width, initial-scale=1.0"
-            >
-
-            <meta
-                name="description"
-                content="MATIA Security Check - Free Authorized Web Security Assessment"
+                content="width=device-width,
+                initial-scale=1.0"
             >
 
             <title>{e(title)}</title>
@@ -378,8 +469,12 @@ def page(title, content):
             </nav>
 
             <div class="container">
+
                 {content}
+
             </div>
+
+            {scripts}
 
         </body>
 
@@ -430,41 +525,30 @@ def home():
             <div class="card">
                 <h2>01 — REQUEST</h2>
                 <p class="muted">
-                    Client submits the target and exact authorized scope.
+                    Client submits the authorized target.
                 </p>
             </div>
 
             <div class="card">
                 <h2>02 — REVIEW</h2>
                 <p class="muted">
-                    Matia reviews the request before testing.
+                    Matia reviews the request.
                 </p>
             </div>
 
             <div class="card">
-                <h2>03 — ASSESSMENT</h2>
+                <h2>03 — CHAT</h2>
                 <p class="muted">
-                    Testing is limited to the approved target and scope.
+                    Client and Matia can communicate directly.
                 </p>
             </div>
 
             <div class="card">
                 <h2>04 — REPORT</h2>
                 <p class="muted">
-                    Confirmed findings are documented in a free report.
+                    Confirmed findings are documented.
                 </p>
             </div>
-
-        </div>
-
-        <div class="card">
-
-            <h2>Important</h2>
-
-            <p class="muted">
-                Only request testing for systems you own or
-                for which you have explicit authorization.
-            </p>
 
         </div>
         """
@@ -513,9 +597,14 @@ def create_request():
             return "Please complete all fields.", 400
 
         if not authorization:
-            return "Authorization confirmation is required.", 400
+            return (
+                "Authorization confirmation is required.",
+                400
+            )
 
-        target_ip = resolve_target_ip(target)
+        target_ip = resolve_target_ip(
+            target
+        )
 
         client_ip = (
             request.remote_addr
@@ -647,7 +736,46 @@ def create_request():
 
 
 # =========================================================
-# CLIENT STATUS
+# CHAT HTML
+# =========================================================
+
+def render_messages(messages):
+
+    html = ""
+
+    for message in messages:
+
+        sender = e(
+            message["sender"]
+        )
+
+        html += f"""
+        <div class="message {sender}">
+
+            <div class="message-header">
+
+                <b>
+                    {sender.upper()}
+                </b>
+
+                <span class="muted">
+                    {e(message["created"])}
+                </span>
+
+            </div>
+
+            <pre>
+{e(message["message"])}
+            </pre>
+
+        </div>
+        """
+
+    return html
+
+
+# =========================================================
+# CLIENT STATUS + CHAT
 # =========================================================
 
 @app.route("/status/<int:request_id>")
@@ -680,66 +808,19 @@ def request_status(request_id):
         (request_id,)
     ).fetchall()
 
-    conn.close()
-
-    chat_html = ""
-
-    if item["status"] in (
-        "ACCEPTED",
-        "IN_PROGRESS",
-        "COMPLETED"
-    ):
-
-        messages_html = ""
-
-        for message in messages:
-
-            messages_html += f"""
-            <div class="message {e(message['sender'])}">
-
-                <b>
-                    {e(message['sender']).upper()}
-                </b>
-
-                <div class="muted">
-                    {e(message['created'])}
-                </div>
-
-                <pre>
-{e(message['message'])}
-                </pre>
-
-            </div>
-            """
-
-        chat_html = f"""
-        <div class="card">
-
-            <h2>
-                CLIENT CHAT
-            </h2>
-
-            {messages_html}
-
-            <form
-                method="POST"
-                action="/status/{request_id}/message"
-            >
-
-                <textarea
-                    name="message"
-                    placeholder="Message Matia..."
-                    required
-                ></textarea>
-
-                <button>
-                    SEND MESSAGE
-                </button>
-
-            </form>
-
-        </div>
+    # Opening the page means client has seen admin messages.
+    conn.execute(
         """
+        UPDATE messages
+        SET read_by_client = 1
+        WHERE request_id = ?
+        AND sender = 'matia'
+        """,
+        (request_id,)
+    )
+
+    conn.commit()
+    conn.close()
 
     findings_html = ""
 
@@ -749,42 +830,31 @@ def request_status(request_id):
         <div class="card">
 
             <h2>
-
                 {e(finding['code'])}
                 —
                 {e(finding['title'])}
-
             </h2>
 
             <p>
-
                 Severity:
-
                 <span class="badge">
                     {e(finding['severity'])}
                 </span>
-
             </p>
 
-            <h3>
-                Evidence
-            </h3>
+            <h3>Evidence</h3>
 
             <pre>
 {e(finding['evidence'])}
             </pre>
 
-            <h3>
-                Impact
-            </h3>
+            <h3>Impact</h3>
 
             <pre>
 {e(finding['impact'])}
             </pre>
 
-            <h3>
-                Recommendation
-            </h3>
+            <h3>Recommendation</h3>
 
             <pre>
 {e(finding['recommendation'])}
@@ -793,9 +863,246 @@ def request_status(request_id):
         </div>
         """
 
+    messages_html = render_messages(
+        messages
+    )
+
+    scripts = f"""
+
+    <script>
+
+    let lastClientNotificationCount = 0;
+    let notificationPermissionAsked = false;
+
+    async function enableNotifications() {{
+
+        if (
+            "Notification" in window &&
+            Notification.permission === "default" &&
+            !notificationPermissionAsked
+        ) {{
+
+            notificationPermissionAsked = true;
+
+            try {{
+                await Notification.requestPermission();
+            }} catch (e) {{}}
+        }}
+    }}
+
+    function showClientNotification(count) {{
+
+        const box = document.getElementById(
+            "clientNotification"
+        );
+
+        const text = document.getElementById(
+            "clientNotificationText"
+        );
+
+        if (count > 0) {{
+
+            text.textContent =
+                "🔔 You have " +
+                count +
+                " new message" +
+                (count === 1 ? "" : "s") +
+                " from Matia.";
+
+            box.classList.add("show");
+
+            if (
+                count > lastClientNotificationCount &&
+                "Notification" in window &&
+                Notification.permission === "granted"
+            ) {{
+
+                try {{
+                    new Notification(
+                        "MATIA // SECURITY CHECK",
+                        {{
+                            body:
+                                "You have a new message from Matia."
+                        }}
+                    );
+                }} catch (e) {{}}
+            }}
+
+        }} else {{
+
+            box.classList.remove("show");
+
+        }}
+
+        lastClientNotificationCount = count;
+    }}
+
+    async function checkClientNotifications() {{
+
+        try {{
+
+            const response = await fetch(
+                "/api/client/{request_id}/notifications",
+                {{
+                    cache: "no-store"
+                }}
+            );
+
+            if (!response.ok) {{
+                return;
+            }}
+
+            const data =
+                await response.json();
+
+            showClientNotification(
+                data.unread
+            );
+
+        }} catch (e) {{}}
+    }}
+
+    async function sendClientMessage(event) {{
+
+        event.preventDefault();
+
+        const form =
+            document.getElementById(
+                "clientChatForm"
+            );
+
+        const button =
+            document.getElementById(
+                "clientSendButton"
+            );
+
+        const textarea =
+            document.getElementById(
+                "clientMessage"
+            );
+
+        const message =
+            textarea.value.trim();
+
+        if (!message) {{
+            return;
+        }}
+
+        button.disabled = true;
+
+        try {{
+
+            const response = await fetch(
+                "/status/{request_id}/message",
+                {{
+                    method: "POST",
+                    headers: {{
+                        "Content-Type":
+                            "application/x-www-form-urlencoded"
+                    }},
+                    body:
+                        "message=" +
+                        encodeURIComponent(message)
+                }}
+            );
+
+            if (response.ok) {{
+                textarea.value = "";
+                await refreshClientMessages();
+            }}
+
+        }} catch (e) {{
+
+            alert("Message could not be sent.");
+
+        }}
+
+        button.disabled = false;
+    }}
+
+    async function refreshClientMessages() {{
+
+        try {{
+
+            const response = await fetch(
+                "/api/client/{request_id}/messages",
+                {{
+                    cache: "no-store"
+                }}
+            );
+
+            if (!response.ok) {{
+                return;
+            }}
+
+            const data =
+                await response.json();
+
+            document.getElementById(
+                "clientMessages"
+            ).innerHTML = data.html;
+
+            await fetch(
+                "/api/client/{request_id}/read",
+                {{
+                    method: "POST"
+                }}
+            );
+
+        }} catch (e) {{}}
+    }}
+
+    document.addEventListener(
+        "DOMContentLoaded",
+        async function() {{
+
+            const form =
+                document.getElementById(
+                    "clientChatForm"
+                );
+
+            if (form) {{
+                form.addEventListener(
+                    "submit",
+                    sendClientMessage
+                );
+            }}
+
+            enableNotifications();
+
+            checkClientNotifications();
+
+            setInterval(
+                checkClientNotifications,
+                2000
+            );
+
+            setInterval(
+                refreshClientMessages,
+                3000
+            );
+
+        }}
+    );
+
+    </script>
+
+    """
+
     return page(
         f"Request #{request_id}",
+
         f"""
+
+        <div
+            id="clientNotification"
+            class="notification"
+        >
+            <span id="clientNotificationText">
+                New message
+            </span>
+        </div>
+
         <div class="card">
 
             <p class="muted">
@@ -807,21 +1114,15 @@ def request_status(request_id):
             </h1>
 
             <p>
-
                 Status:
-
                 <span class="badge">
                     {e(item['status'])}
                 </span>
-
             </p>
 
             <p>
-
                 <b>Target:</b>
-
                 {e(item['target'])}
-
             </p>
 
             <div class="ip-box">
@@ -851,15 +1152,52 @@ def request_status(request_id):
 
         </div>
 
-        {chat_html}
+
+        <div class="card">
+
+            <h2>
+                💬 CHAT WITH MATIA
+            </h2>
+
+            <div
+                id="clientMessages"
+                class="chat-box"
+            >
+                {messages_html}
+            </div>
+
+            <form
+                id="clientChatForm"
+            >
+
+                <textarea
+                    id="clientMessage"
+                    placeholder="Write a message to Matia..."
+                    required
+                ></textarea>
+
+                <button
+                    id="clientSendButton"
+                    type="submit"
+                >
+                    SEND MESSAGE
+                </button>
+
+            </form>
+
+        </div>
+
 
         {findings_html}
-        """
+
+        """,
+
+        scripts
     )
 
 
 # =========================================================
-# CLIENT CHAT
+# CLIENT MESSAGE
 # =========================================================
 
 @app.post("/status/<int:request_id>/message")
@@ -869,13 +1207,6 @@ def client_message(request_id):
 
     if not item:
         return "Request not found.", 404
-
-    if item["status"] not in (
-        "ACCEPTED",
-        "IN_PROGRESS",
-        "COMPLETED"
-    ):
-        return "Chat is not active yet.", 403
 
     message = request.form.get(
         "message",
@@ -893,34 +1224,138 @@ def client_message(request_id):
                 request_id,
                 sender,
                 message,
-                created
+                created,
+                read_by_client,
+                read_by_admin
             )
-            VALUES (?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 request_id,
                 "client",
                 message,
-                now()
+                now(),
+                1,
+                0
             )
         )
 
         conn.commit()
         conn.close()
 
-    return redirect(
-        url_for(
-            "request_status",
-            request_id=request_id
-        )
+    return jsonify({
+        "success": True
+    })
+
+
+# =========================================================
+# CLIENT NOTIFICATIONS
+# =========================================================
+
+@app.get(
+    "/api/client/<int:request_id>/notifications"
+)
+def client_notifications(request_id):
+
+    item = get_request(request_id)
+
+    if not item:
+        return jsonify({
+            "error": "Request not found"
+        }), 404
+
+    conn = get_db()
+
+    unread = conn.execute(
+        """
+        SELECT COUNT(*) AS count
+        FROM messages
+        WHERE request_id = ?
+        AND sender = 'matia'
+        AND read_by_client = 0
+        """,
+        (request_id,)
+    ).fetchone()["count"]
+
+    conn.close()
+
+    return jsonify({
+        "unread": unread
+    })
+
+
+# =========================================================
+# CLIENT MESSAGES
+# =========================================================
+
+@app.get(
+    "/api/client/<int:request_id>/messages"
+)
+def client_messages(request_id):
+
+    item = get_request(request_id)
+
+    if not item:
+        return jsonify({
+            "error": "Request not found"
+        }), 404
+
+    conn = get_db()
+
+    messages = conn.execute(
+        """
+        SELECT *
+        FROM messages
+        WHERE request_id = ?
+        ORDER BY id
+        """,
+        (request_id,)
+    ).fetchall()
+
+    conn.close()
+
+    return jsonify({
+        "html": render_messages(messages)
+    })
+
+
+# =========================================================
+# CLIENT READ
+# =========================================================
+
+@app.post(
+    "/api/client/<int:request_id>/read"
+)
+def client_read(request_id):
+
+    conn = get_db()
+
+    conn.execute(
+        """
+        UPDATE messages
+        SET read_by_client = 1
+        WHERE request_id = ?
+        AND sender = 'matia'
+        """,
+        (request_id,)
     )
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "success": True
+    })
 
 
 # =========================================================
 # ADMIN LOGIN
 # =========================================================
 
-@app.route("/admin/login", methods=["GET", "POST"])
+@app.route(
+    "/admin/login",
+    methods=["GET", "POST"]
+)
 def admin_login():
 
     if request.method == "POST":
@@ -928,12 +1363,18 @@ def admin_login():
         username = request.form.get(
             "username",
             ""
-        )
+        ).strip()
 
         password = request.form.get(
             "password",
             ""
         )
+
+        if not ADMIN_USER or not ADMIN_PASSWORD:
+            return (
+                "Admin credentials are not configured.",
+                500
+            )
 
         valid_user = secrets.compare_digest(
             username,
@@ -955,7 +1396,10 @@ def admin_login():
                 url_for("admin_panel")
             )
 
-        return "Invalid username or password.", 401
+        return (
+            "Invalid username or password.",
+            401
+        )
 
     return page(
         "Admin Login",
@@ -1002,6 +1446,32 @@ def admin_login():
 
 
 # =========================================================
+# ADMIN NOTIFICATIONS
+# =========================================================
+
+@app.get("/api/admin/notifications")
+@admin_required
+def admin_notifications():
+
+    conn = get_db()
+
+    unread = conn.execute(
+        """
+        SELECT COUNT(*) AS count
+        FROM messages
+        WHERE sender = 'client'
+        AND read_by_admin = 0
+        """
+    ).fetchone()["count"]
+
+    conn.close()
+
+    return jsonify({
+        "unread": unread
+    })
+
+
+# =========================================================
 # ADMIN DASHBOARD
 # =========================================================
 
@@ -1041,15 +1511,9 @@ def admin_panel():
             </td>
 
             <td>
-                {e(item['target_ip'])}
-            </td>
-
-            <td>
-
                 <span class="badge">
                     {e(item['status'])}
                 </span>
-
             </td>
 
             <td>
@@ -1063,9 +1527,140 @@ def admin_panel():
         </tr>
         """
 
+    scripts = """
+
+    <script>
+
+    let lastAdminNotificationCount = 0;
+
+    async function enableAdminNotifications() {
+
+        if (
+            "Notification" in window &&
+            Notification.permission === "default"
+        ) {
+
+            try {
+                await Notification.requestPermission();
+            } catch (e) {}
+
+        }
+
+    }
+
+    async function checkAdminNotifications() {
+
+        try {
+
+            const response = await fetch(
+                "/api/admin/notifications",
+                {
+                    cache: "no-store"
+                }
+            );
+
+            if (!response.ok) {
+                return;
+            }
+
+            const data =
+                await response.json();
+
+            const box =
+                document.getElementById(
+                    "adminNotification"
+                );
+
+            const text =
+                document.getElementById(
+                    "adminNotificationText"
+                );
+
+            if (data.unread > 0) {
+
+                text.textContent =
+                    "🔔 " +
+                    data.unread +
+                    " new client message" +
+                    (
+                        data.unread === 1
+                        ? ""
+                        : "s"
+                    ) +
+                    ".";
+
+                box.classList.add("show");
+
+                if (
+                    data.unread >
+                        lastAdminNotificationCount &&
+                    "Notification" in window &&
+                    Notification.permission === "granted"
+                ) {
+
+                    try {
+
+                        new Notification(
+                            "MATIA // SECURITY CHECK",
+                            {
+                                body:
+                                    "A client sent you a new message."
+                            }
+                        );
+
+                    } catch (e) {}
+
+                }
+
+            } else {
+
+                box.classList.remove("show");
+
+            }
+
+            lastAdminNotificationCount =
+                data.unread;
+
+        } catch (e) {}
+
+    }
+
+    document.addEventListener(
+        "DOMContentLoaded",
+        function() {
+
+            enableAdminNotifications();
+
+            checkAdminNotifications();
+
+            setInterval(
+                checkAdminNotifications,
+                2000
+            );
+
+        }
+    );
+
+    </script>
+
+    """
+
     return page(
         "MATIA Admin Panel",
+
         f"""
+
+        <div
+            id="adminNotification"
+            class="notification"
+        >
+
+            <span id="adminNotificationText">
+                New client message
+            </span>
+
+        </div>
+
         <div class="card">
 
             <h1>
@@ -1087,7 +1682,6 @@ def admin_panel():
                     <th>ID</th>
                     <th>Client</th>
                     <th>Target</th>
-                    <th>Resolved IP</th>
                     <th>Status</th>
                     <th>Open</th>
 
@@ -1106,7 +1700,10 @@ def admin_panel():
             </a>
 
         </div>
-        """
+
+        """,
+
+        scripts
     )
 
 
@@ -1167,6 +1764,17 @@ def admin_request(request_id):
             (request_id,)
         ).fetchone()
 
+    # Opening request marks client messages as read.
+    conn.execute(
+        """
+        UPDATE messages
+        SET read_by_admin = 1
+        WHERE request_id = ?
+        AND sender = 'client'
+        """,
+        (request_id,)
+    )
+
     messages = conn.execute(
         """
         SELECT *
@@ -1187,29 +1795,12 @@ def admin_request(request_id):
         (request_id,)
     ).fetchall()
 
+    conn.commit()
     conn.close()
 
-    messages_html = ""
-
-    for message in messages:
-
-        messages_html += f"""
-        <div class="message {e(message['sender'])}">
-
-            <b>
-                {e(message['sender']).upper()}
-            </b>
-
-            <div class="muted">
-                {e(message['created'])}
-            </div>
-
-            <pre>
-{e(message['message'])}
-            </pre>
-
-        </div>
-        """
+    messages_html = render_messages(
+        messages
+    )
 
     findings_html = ""
 
@@ -1219,42 +1810,31 @@ def admin_request(request_id):
         <div class="card">
 
             <h2>
-
                 {e(finding['code'])}
                 —
                 {e(finding['title'])}
-
             </h2>
 
             <p>
-
                 Severity:
-
                 <span class="badge">
                     {e(finding['severity'])}
                 </span>
-
             </p>
 
-            <h3>
-                Evidence
-            </h3>
+            <h3>Evidence</h3>
 
             <pre>
 {e(finding['evidence'])}
             </pre>
 
-            <h3>
-                Impact
-            </h3>
+            <h3>Impact</h3>
 
             <pre>
 {e(finding['impact'])}
             </pre>
 
-            <h3>
-                Recommendation
-            </h3>
+            <h3>Recommendation</h3>
 
             <pre>
 {e(finding['recommendation'])}
@@ -1263,9 +1843,251 @@ def admin_request(request_id):
         </div>
         """
 
+    scripts = f"""
+
+    <script>
+
+    let lastRequestNotificationCount = 0;
+
+    async function checkRequestNotifications() {{
+
+        try {{
+
+            const response = await fetch(
+                "/api/admin/notifications",
+                {{
+                    cache: "no-store"
+                }}
+            );
+
+            if (!response.ok) {{
+                return;
+            }}
+
+            const data =
+                await response.json();
+
+            const box =
+                document.getElementById(
+                    "requestNotification"
+                );
+
+            const text =
+                document.getElementById(
+                    "requestNotificationText"
+                );
+
+            if (data.unread > 0) {{
+
+                text.textContent =
+                    "🔔 " +
+                    data.unread +
+                    " new client message" +
+                    (
+                        data.unread === 1
+                        ? ""
+                        : "s"
+                    ) +
+                    ".";
+
+                box.classList.add("show");
+
+                if (
+                    data.unread >
+                        lastRequestNotificationCount &&
+                    "Notification" in window &&
+                    Notification.permission === "granted"
+                ) {{
+
+                    try {{
+
+                        new Notification(
+                            "MATIA // SECURITY CHECK",
+                            {{
+                                body:
+                                    "A client sent you a new message."
+                            }}
+                        );
+
+                    }} catch (e) {{}}
+
+                }}
+
+            }} else {{
+
+                box.classList.remove("show");
+
+            }}
+
+            lastRequestNotificationCount =
+                data.unread;
+
+        }} catch (e) {{}}
+
+    }}
+
+
+    async function sendAdminMessage(event) {{
+
+        event.preventDefault();
+
+        const form =
+            document.getElementById(
+                "adminChatForm"
+            );
+
+        const button =
+            document.getElementById(
+                "adminSendButton"
+            );
+
+        const textarea =
+            document.getElementById(
+                "adminMessage"
+            );
+
+        const message =
+            textarea.value.trim();
+
+        if (!message) {{
+            return;
+        }}
+
+        button.disabled = true;
+
+        try {{
+
+            const response = await fetch(
+                "/admin/request/{request_id}/message",
+                {{
+                    method: "POST",
+                    headers: {{
+                        "Content-Type":
+                            "application/x-www-form-urlencoded"
+                    }},
+                    body:
+                        "message=" +
+                        encodeURIComponent(message)
+                }}
+            );
+
+            if (response.ok) {{
+
+                textarea.value = "";
+
+                await refreshAdminMessages();
+
+            }}
+
+        }} catch (e) {{
+
+            alert(
+                "Message could not be sent."
+            );
+
+        }}
+
+        button.disabled = false;
+    }}
+
+
+    async function refreshAdminMessages() {{
+
+        try {{
+
+            const response = await fetch(
+                "/api/admin/request/{request_id}/messages",
+                {{
+                    cache: "no-store"
+                }}
+            );
+
+            if (!response.ok) {{
+                return;
+            }}
+
+            const data =
+                await response.json();
+
+            document.getElementById(
+                "adminMessages"
+            ).innerHTML = data.html;
+
+            await fetch(
+                "/api/admin/request/{request_id}/read",
+                {{
+                    method: "POST"
+                }}
+            );
+
+        }} catch (e) {{}}
+
+    }}
+
+
+    document.addEventListener(
+        "DOMContentLoaded",
+        function() {{
+
+            const form =
+                document.getElementById(
+                    "adminChatForm"
+                );
+
+            if (form) {{
+
+                form.addEventListener(
+                    "submit",
+                    sendAdminMessage
+                );
+
+            }}
+
+            if (
+                "Notification" in window &&
+                Notification.permission === "default"
+            ) {{
+
+                Notification.requestPermission()
+                    .catch(function() {{}});
+
+            }}
+
+            checkRequestNotifications();
+
+            setInterval(
+                checkRequestNotifications,
+                2000
+            );
+
+            setInterval(
+                refreshAdminMessages,
+                3000
+            );
+
+        }}
+    );
+
+    </script>
+
+    """
+
     return page(
         f"Request #{request_id}",
+
         f"""
+
+        <div
+            id="requestNotification"
+            class="notification"
+        >
+
+            <span id="requestNotificationText">
+                New client message
+            </span>
+
+        </div>
+
         <div class="card">
 
             <h1>
@@ -1273,27 +2095,18 @@ def admin_request(request_id):
             </h1>
 
             <p>
-
                 <b>Client:</b>
-
                 {e(item['name'])}
-
             </p>
 
             <p>
-
                 <b>Email:</b>
-
                 {e(item['email'])}
-
             </p>
 
             <p>
-
                 <b>Target:</b>
-
                 {e(item['target'])}
-
             </p>
 
             <div class="ip-box">
@@ -1309,13 +2122,11 @@ def admin_request(request_id):
             </div>
 
             <p>
-
                 <b>
                     Client Connection IP:
                 </b>
 
                 {e(item['client_ip'])}
-
             </p>
 
             <h3>
@@ -1328,9 +2139,7 @@ def admin_request(request_id):
 
             <p>
 
-                <b>
-                    Status:
-                </b>
+                <b>Status:</b>
 
                 <span class="badge">
                     {e(item['status'])}
@@ -1369,23 +2178,30 @@ def admin_request(request_id):
         <div class="card">
 
             <h2>
-                CLIENT CHAT
+                💬 CLIENT CHAT
             </h2>
 
-            {messages_html}
+            <div
+                id="adminMessages"
+                class="chat-box"
+            >
+                {messages_html}
+            </div>
 
             <form
-                method="POST"
-                action="/admin/request/{request_id}/message"
+                id="adminChatForm"
             >
 
                 <textarea
-                    name="message"
+                    id="adminMessage"
                     placeholder="Message client..."
                     required
                 ></textarea>
 
-                <button>
+                <button
+                    id="adminSendButton"
+                    type="submit"
+                >
                     SEND MESSAGE
                 </button>
 
@@ -1498,7 +2314,9 @@ def admin_request(request_id):
 
         <div class="card">
 
-            <a href="/admin/request/{request_id}/report">
+            <a
+                href="/admin/request/{request_id}/report"
+            >
 
                 <button>
                     OPEN FINAL REPORT
@@ -1507,7 +2325,10 @@ def admin_request(request_id):
             </a>
 
         </div>
-        """
+
+        """,
+
+        scripts
     )
 
 
@@ -1542,15 +2363,19 @@ def admin_message(request_id):
                 request_id,
                 sender,
                 message,
-                created
+                created,
+                read_by_client,
+                read_by_admin
             )
-            VALUES (?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 request_id,
                 "matia",
                 message,
-                now()
+                now(),
+                0,
+                1
             )
         )
 
@@ -1568,12 +2393,73 @@ def admin_message(request_id):
         conn.commit()
         conn.close()
 
-    return redirect(
-        url_for(
-            "admin_request",
-            request_id=request_id
-        )
+    return jsonify({
+        "success": True
+    })
+
+
+# =========================================================
+# ADMIN MESSAGES
+# =========================================================
+
+@app.get(
+    "/api/admin/request/<int:request_id>/messages"
+)
+@admin_required
+def admin_messages(request_id):
+
+    if not get_request(request_id):
+        return jsonify({
+            "error": "Request not found"
+        }), 404
+
+    conn = get_db()
+
+    messages = conn.execute(
+        """
+        SELECT *
+        FROM messages
+        WHERE request_id = ?
+        ORDER BY id
+        """,
+        (request_id,)
+    ).fetchall()
+
+    conn.close()
+
+    return jsonify({
+        "html": render_messages(messages)
+    })
+
+
+# =========================================================
+# ADMIN READ
+# =========================================================
+
+@app.post(
+    "/api/admin/request/<int:request_id>/read"
+)
+@admin_required
+def admin_read(request_id):
+
+    conn = get_db()
+
+    conn.execute(
+        """
+        UPDATE messages
+        SET read_by_admin = 1
+        WHERE request_id = ?
+        AND sender = 'client'
+        """,
+        (request_id,)
     )
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "success": True
+    })
 
 
 # =========================================================
@@ -1622,7 +2508,10 @@ def add_finding(request_id):
     }
 
     if not all(fields.values()):
-        return "Complete all finding fields.", 400
+        return (
+            "Complete all finding fields.",
+            400
+        )
 
     conn = get_db()
 
@@ -1699,11 +2588,9 @@ def report(request_id):
         <div class="card">
 
             <h2>
-
                 {e(finding['code'])}
                 —
                 {e(finding['title'])}
-
             </h2>
 
             <p>
@@ -1745,7 +2632,9 @@ def report(request_id):
 
     return page(
         f"Security Report #{request_id}",
+
         f"""
+
         <div class="card">
 
             <p class="muted">
@@ -1757,45 +2646,32 @@ def report(request_id):
             </h1>
 
             <p>
-
                 <b>Request:</b>
-
                 #{item['id']}
-
             </p>
 
             <p>
-
                 <b>Client:</b>
-
                 {e(item['name'])}
-
             </p>
 
             <p>
-
                 <b>Target:</b>
-
                 {e(item['target'])}
-
             </p>
 
             <p>
-
                 <b>Resolved IP:</b>
-
                 {e(item['target_ip'])}
-
             </p>
 
             <p>
-
                 <b>Date:</b>
-
                 {e(
-                    datetime.now().strftime("%Y-%m-%d")
+                    datetime.now().strftime(
+                        "%Y-%m-%d"
+                    )
                 )}
-
             </p>
 
         </div>
@@ -1836,14 +2712,13 @@ def report(request_id):
             </p>
 
             <p>
-
                 <strong>
                     MATIA // SECURITY CHECK
                 </strong>
-
             </p>
 
         </div>
+
         """
     )
 
@@ -1861,7 +2736,7 @@ def admin_logout():
 
 
 # =========================================================
-# START
+# LOCAL START
 # =========================================================
 
 if __name__ == "__main__":
@@ -1876,11 +2751,9 @@ if __name__ == "__main__":
     print("=" * 60)
     print("MATIA // SECURITY CHECK")
     print("=" * 60)
-    print("FREE AUTHORIZED SECURITY ASSESSMENT")
     print("Host: 0.0.0.0")
     print("Port:", port)
-    print("Automatic DNS/IP lookup: ENABLED")
-    print("Automatic target scanning: DISABLED")
+    print("Chat notifications: ENABLED")
     print("=" * 60)
 
     app.run(
