@@ -81,6 +81,12 @@ def init_db():
     conn.close()
 
 
+# IMPORTANT:
+# Render/Gunicorn imports "app", so this must run outside
+# if __name__ == "__main__":
+init_db()
+
+
 # =========================================================
 # HELPERS
 # =========================================================
@@ -101,10 +107,12 @@ def admin_required(func):
 
 def get_request(request_id):
     conn = get_db()
+
     item = conn.execute(
         "SELECT * FROM requests WHERE id = ?",
         (request_id,)
     ).fetchone()
+
     conn.close()
     return item
 
@@ -142,6 +150,7 @@ def resolve_target_ip(target):
 
         for result in results:
             ip = result[4][0]
+
             if ip not in ips:
                 ips.append(ip)
 
@@ -159,11 +168,12 @@ def e(value):
 
 
 # =========================================================
-# HTML
+# HTML / STYLE
 # =========================================================
 
 STYLE = """
 <style>
+
 * {
     box-sizing: border-box;
 }
@@ -206,7 +216,8 @@ nav {
     padding: 55px 25px;
 }
 
-h1, h2 {
+h1,
+h2 {
     color: #00eaff;
 }
 
@@ -277,7 +288,10 @@ a {
 
 .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(
+        auto-fit,
+        minmax(220px, 1fr)
+    );
     gap: 15px;
 }
 
@@ -322,6 +336,7 @@ pre {
     border-radius: 10px;
     margin-top: 10px;
 }
+
 </style>
 """
 
@@ -331,25 +346,35 @@ def page(title, content):
         f"""
         <!DOCTYPE html>
         <html>
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport"
-                  content="width=device-width, initial-scale=1.0">
 
-            <meta name="description"
-                  content="MATIA Security Check - Free Authorized Web Security Assessment">
+        <head>
+
+            <meta charset="UTF-8">
+
+            <meta
+                name="viewport"
+                content="width=device-width, initial-scale=1.0"
+            >
+
+            <meta
+                name="description"
+                content="MATIA Security Check - Free Authorized Web Security Assessment"
+            >
 
             <title>{e(title)}</title>
 
             {STYLE}
+
         </head>
 
         <body>
 
             <nav>
+
                 <div class="logo">
                     MATIA // SECURITY CHECK
                 </div>
+
             </nav>
 
             <div class="container">
@@ -357,6 +382,7 @@ def page(title, content):
             </div>
 
         </body>
+
         </html>
         """
     )
@@ -368,6 +394,7 @@ def page(title, content):
 
 @app.route("/")
 def home():
+
     return page(
         "MATIA SECURITY CHECK",
         """
@@ -431,11 +458,14 @@ def home():
         </div>
 
         <div class="card">
+
             <h2>Important</h2>
+
             <p class="muted">
                 Only request testing for systems you own or
                 for which you have explicit authorization.
             </p>
+
         </div>
         """
     )
@@ -450,20 +480,47 @@ def create_request():
 
     if request.method == "POST":
 
-        name = request.form.get("name", "").strip()
-        email = request.form.get("email", "").strip()
-        target = request.form.get("target", "").strip()
-        scope = request.form.get("scope", "").strip()
-        authorization = request.form.get("authorization")
+        name = request.form.get(
+            "name",
+            ""
+        ).strip()
 
-        if not all([name, email, target, scope]):
+        email = request.form.get(
+            "email",
+            ""
+        ).strip()
+
+        target = request.form.get(
+            "target",
+            ""
+        ).strip()
+
+        scope = request.form.get(
+            "scope",
+            ""
+        ).strip()
+
+        authorization = request.form.get(
+            "authorization"
+        )
+
+        if not all([
+            name,
+            email,
+            target,
+            scope
+        ]):
             return "Please complete all fields.", 400
 
         if not authorization:
             return "Authorization confirmation is required.", 400
 
         target_ip = resolve_target_ip(target)
-        client_ip = request.remote_addr or "unknown"
+
+        client_ip = (
+            request.remote_addr
+            or "unknown"
+        )
 
         conn = get_db()
 
@@ -495,7 +552,9 @@ def create_request():
         )
 
         conn.commit()
+
         request_id = cursor.lastrowid
+
         conn.close()
 
         return redirect(
@@ -520,20 +579,39 @@ def create_request():
 
             <form method="POST">
 
-                <label>Name</label>
-                <input name="name" required>
+                <label>
+                    Name
+                </label>
 
-                <label>Email</label>
-                <input name="email" type="email" required>
+                <input
+                    name="name"
+                    required
+                >
 
-                <label>Target Website</label>
+                <label>
+                    Email
+                </label>
+
+                <input
+                    name="email"
+                    type="email"
+                    required
+                >
+
+                <label>
+                    Target Website
+                </label>
+
                 <input
                     name="target"
                     placeholder="https://example.com"
                     required
                 >
 
-                <label>Authorized Scope</label>
+                <label>
+                    Authorized Scope
+                </label>
+
                 <textarea
                     name="scope"
                     placeholder="Example: public website only"
@@ -541,6 +619,7 @@ def create_request():
                 ></textarea>
 
                 <label>
+
                     <input
                         type="checkbox"
                         name="authorization"
@@ -551,6 +630,7 @@ def create_request():
                     I confirm that I own or am authorized
                     to request security testing for this
                     target within the scope above.
+
                 </label>
 
                 <br><br>
@@ -613,18 +693,31 @@ def request_status(request_id):
         messages_html = ""
 
         for message in messages:
+
             messages_html += f"""
             <div class="message {e(message['sender'])}">
-                <b>{e(message['sender']).upper()}</b>
-                <div class="muted">{e(message['created'])}</div>
-                <pre>{e(message['message'])}</pre>
+
+                <b>
+                    {e(message['sender']).upper()}
+                </b>
+
+                <div class="muted">
+                    {e(message['created'])}
+                </div>
+
+                <pre>
+{e(message['message'])}
+                </pre>
+
             </div>
             """
 
         chat_html = f"""
         <div class="card">
 
-            <h2>CLIENT CHAT</h2>
+            <h2>
+                CLIENT CHAT
+            </h2>
 
             {messages_html}
 
@@ -632,6 +725,7 @@ def request_status(request_id):
                 method="POST"
                 action="/status/{request_id}/message"
             >
+
                 <textarea
                     name="message"
                     placeholder="Message Matia..."
@@ -641,6 +735,7 @@ def request_status(request_id):
                 <button>
                     SEND MESSAGE
                 </button>
+
             </form>
 
         </div>
@@ -649,29 +744,51 @@ def request_status(request_id):
     findings_html = ""
 
     for finding in findings:
+
         findings_html += f"""
         <div class="card">
 
             <h2>
-                {e(finding['code'])} —
+
+                {e(finding['code'])}
+                —
                 {e(finding['title'])}
+
             </h2>
 
             <p>
+
                 Severity:
+
                 <span class="badge">
                     {e(finding['severity'])}
                 </span>
+
             </p>
 
-            <h3>Evidence</h3>
-            <pre>{e(finding['evidence'])}</pre>
+            <h3>
+                Evidence
+            </h3>
 
-            <h3>Impact</h3>
-            <pre>{e(finding['impact'])}</pre>
+            <pre>
+{e(finding['evidence'])}
+            </pre>
 
-            <h3>Recommendation</h3>
-            <pre>{e(finding['recommendation'])}</pre>
+            <h3>
+                Impact
+            </h3>
+
+            <pre>
+{e(finding['impact'])}
+            </pre>
+
+            <h3>
+                Recommendation
+            </h3>
+
+            <pre>
+{e(finding['recommendation'])}
+            </pre>
 
         </div>
         """
@@ -690,20 +807,29 @@ def request_status(request_id):
             </h1>
 
             <p>
+
                 Status:
+
                 <span class="badge">
                     {e(item['status'])}
                 </span>
+
             </p>
 
             <p>
+
                 <b>Target:</b>
+
                 {e(item['target'])}
+
             </p>
 
             <div class="ip-box">
 
-                <b>Resolved Target IP:</b>
+                <b>
+                    Resolved Target IP:
+                </b>
+
                 <br><br>
 
                 {e(item['target_ip'])}
@@ -751,7 +877,10 @@ def client_message(request_id):
     ):
         return "Chat is not active yet.", 403
 
-    message = request.form.get("message", "").strip()
+    message = request.form.get(
+        "message",
+        ""
+    ).strip()
 
     if message:
 
@@ -796,8 +925,15 @@ def admin_login():
 
     if request.method == "POST":
 
-        username = request.form.get("username", "")
-        password = request.form.get("password", "")
+        username = request.form.get(
+            "username",
+            ""
+        )
+
+        password = request.form.get(
+            "password",
+            ""
+        )
 
         valid_user = secrets.compare_digest(
             username,
@@ -812,9 +948,12 @@ def admin_login():
         if valid_user and valid_password:
 
             session.clear()
+
             session["admin"] = True
 
-            return redirect(url_for("admin_panel"))
+            return redirect(
+                url_for("admin_panel")
+            )
 
         return "Invalid username or password.", 401
 
@@ -885,6 +1024,7 @@ def admin_panel():
     rows = ""
 
     for item in requests_list:
+
         rows += f"""
         <tr>
 
@@ -905,15 +1045,19 @@ def admin_panel():
             </td>
 
             <td>
+
                 <span class="badge">
                     {e(item['status'])}
                 </span>
+
             </td>
 
             <td>
+
                 <a href="/admin/request/{item['id']}">
                     OPEN
                 </a>
+
             </td>
 
         </tr>
@@ -939,12 +1083,14 @@ def admin_panel():
             <table>
 
                 <tr>
+
                     <th>ID</th>
                     <th>Client</th>
                     <th>Target</th>
                     <th>Resolved IP</th>
                     <th>Status</th>
                     <th>Open</th>
+
                 </tr>
 
                 {rows}
@@ -954,9 +1100,11 @@ def admin_panel():
         </div>
 
         <div class="card">
+
             <a href="/admin/logout">
                 LOG OUT
             </a>
+
         </div>
         """
     )
@@ -982,7 +1130,9 @@ def admin_request(request_id):
 
     if request.method == "POST":
 
-        action = request.form.get("action")
+        action = request.form.get(
+            "action"
+        )
 
         if action == "accept":
 
@@ -1069,25 +1219,46 @@ def admin_request(request_id):
         <div class="card">
 
             <h2>
-                {e(finding['code'])} —
+
+                {e(finding['code'])}
+                —
                 {e(finding['title'])}
+
             </h2>
 
             <p>
+
                 Severity:
+
                 <span class="badge">
                     {e(finding['severity'])}
                 </span>
+
             </p>
 
-            <h3>Evidence</h3>
-            <pre>{e(finding['evidence'])}</pre>
+            <h3>
+                Evidence
+            </h3>
 
-            <h3>Impact</h3>
-            <pre>{e(finding['impact'])}</pre>
+            <pre>
+{e(finding['evidence'])}
+            </pre>
 
-            <h3>Recommendation</h3>
-            <pre>{e(finding['recommendation'])}</pre>
+            <h3>
+                Impact
+            </h3>
+
+            <pre>
+{e(finding['impact'])}
+            </pre>
+
+            <h3>
+                Recommendation
+            </h3>
+
+            <pre>
+{e(finding['recommendation'])}
+            </pre>
 
         </div>
         """
@@ -1102,18 +1273,27 @@ def admin_request(request_id):
             </h1>
 
             <p>
+
                 <b>Client:</b>
+
                 {e(item['name'])}
+
             </p>
 
             <p>
+
                 <b>Email:</b>
+
                 {e(item['email'])}
+
             </p>
 
             <p>
+
                 <b>Target:</b>
+
                 {e(item['target'])}
+
             </p>
 
             <div class="ip-box">
@@ -1129,8 +1309,13 @@ def admin_request(request_id):
             </div>
 
             <p>
-                <b>Client Connection IP:</b>
+
+                <b>
+                    Client Connection IP:
+                </b>
+
                 {e(item['client_ip'])}
+
             </p>
 
             <h3>
@@ -1142,11 +1327,15 @@ def admin_request(request_id):
             </pre>
 
             <p>
-                <b>Status:</b>
+
+                <b>
+                    Status:
+                </b>
 
                 <span class="badge">
                     {e(item['status'])}
                 </span>
+
             </p>
 
         </div>
@@ -1241,12 +1430,31 @@ def admin_request(request_id):
                 </label>
 
                 <select name="severity">
-                    <option>Informational</option>
-                    <option>Low</option>
-                    <option>Low-Medium</option>
-                    <option>Medium</option>
-                    <option>High</option>
-                    <option>Critical</option>
+
+                    <option>
+                        Informational
+                    </option>
+
+                    <option>
+                        Low
+                    </option>
+
+                    <option>
+                        Low-Medium
+                    </option>
+
+                    <option>
+                        Medium
+                    </option>
+
+                    <option>
+                        High
+                    </option>
+
+                    <option>
+                        Critical
+                    </option>
+
                 </select>
 
                 <label>
@@ -1291,9 +1499,11 @@ def admin_request(request_id):
         <div class="card">
 
             <a href="/admin/request/{request_id}/report">
+
                 <button>
                     OPEN FINAL REPORT
                 </button>
+
             </a>
 
         </div>
@@ -1380,11 +1590,31 @@ def add_finding(request_id):
         return "Request not found.", 404
 
     fields = {
-        "code": request.form.get("code", "").strip(),
-        "title": request.form.get("title", "").strip(),
-        "severity": request.form.get("severity", "").strip(),
-        "evidence": request.form.get("evidence", "").strip(),
-        "impact": request.form.get("impact", "").strip(),
+        "code": request.form.get(
+            "code",
+            ""
+        ).strip(),
+
+        "title": request.form.get(
+            "title",
+            ""
+        ).strip(),
+
+        "severity": request.form.get(
+            "severity",
+            ""
+        ).strip(),
+
+        "evidence": request.form.get(
+            "evidence",
+            ""
+        ).strip(),
+
+        "impact": request.form.get(
+            "impact",
+            ""
+        ).strip(),
+
         "recommendation": request.form.get(
             "recommendation",
             ""
@@ -1469,25 +1699,46 @@ def report(request_id):
         <div class="card">
 
             <h2>
-                {e(finding['code'])} —
+
+                {e(finding['code'])}
+                —
                 {e(finding['title'])}
+
             </h2>
 
             <p>
+
                 Severity:
+
                 <span class="badge">
                     {e(finding['severity'])}
                 </span>
+
             </p>
 
-            <h3>Evidence</h3>
-            <pre>{e(finding['evidence'])}</pre>
+            <h3>
+                Evidence
+            </h3>
 
-            <h3>Impact</h3>
-            <pre>{e(finding['impact'])}</pre>
+            <pre>
+{e(finding['evidence'])}
+            </pre>
 
-            <h3>Recommendation</h3>
-            <pre>{e(finding['recommendation'])}</pre>
+            <h3>
+                Impact
+            </h3>
+
+            <pre>
+{e(finding['impact'])}
+            </pre>
+
+            <h3>
+                Recommendation
+            </h3>
+
+            <pre>
+{e(finding['recommendation'])}
+            </pre>
 
         </div>
         """
@@ -1506,28 +1757,45 @@ def report(request_id):
             </h1>
 
             <p>
+
                 <b>Request:</b>
+
                 #{item['id']}
+
             </p>
 
             <p>
+
                 <b>Client:</b>
+
                 {e(item['name'])}
+
             </p>
 
             <p>
+
                 <b>Target:</b>
+
                 {e(item['target'])}
+
             </p>
 
             <p>
+
                 <b>Resolved IP:</b>
+
                 {e(item['target_ip'])}
+
             </p>
 
             <p>
+
                 <b>Date:</b>
-                {e(datetime.now().strftime("%Y-%m-%d"))}
+
+                {e(
+                    datetime.now().strftime("%Y-%m-%d")
+                )}
+
             </p>
 
         </div>
@@ -1568,9 +1836,11 @@ def report(request_id):
             </p>
 
             <p>
+
                 <strong>
                     MATIA // SECURITY CHECK
                 </strong>
+
             </p>
 
         </div>
@@ -1584,7 +1854,9 @@ def report(request_id):
 
 @app.route("/admin/logout")
 def admin_logout():
+
     session.clear()
+
     return redirect("/")
 
 
@@ -1593,8 +1865,6 @@ def admin_logout():
 # =========================================================
 
 if __name__ == "__main__":
-
-    init_db()
 
     port = int(
         os.environ.get(
