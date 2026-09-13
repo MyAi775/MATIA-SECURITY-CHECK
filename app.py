@@ -1,3 +1,4 @@
+```python
 import os
 import secrets
 import socket
@@ -52,7 +53,10 @@ GOOGLE_CLIENT_SECRET = os.environ.get(
     "",
 )
 
-# BOTH GOOGLE ACCOUNTS ARE ALLOWED
+# =========================================================
+# TWO ALLOWED GOOGLE ADMIN ACCOUNTS
+# =========================================================
+
 ALLOWED_ADMIN_EMAILS = {
     "kleimatia1@gmail.com",
     "vantyx199@gmail.com",
@@ -60,11 +64,8 @@ ALLOWED_ADMIN_EMAILS = {
 
 
 app.config["SECRET_KEY"] = SECRET_KEY
-
 app.config["SESSION_COOKIE_HTTPONLY"] = True
-
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-
 app.config["SESSION_COOKIE_SECURE"] = (
     os.environ.get(
         "SESSION_COOKIE_SECURE",
@@ -98,18 +99,12 @@ google = oauth.register(
 # =========================================================
 
 def db():
-
-    conn = sqlite3.connect(
-        DB_FILE
-    )
-
+    conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
-
     return conn
 
 
 def init_db():
-
     conn = db()
 
     conn.execute("""
@@ -151,8 +146,6 @@ def init_db():
         )
     """)
 
-    conn.commit()
-
     columns = {
         row["name"]
         for row in conn.execute(
@@ -161,27 +154,20 @@ def init_db():
     }
 
     if "read_by_client" not in columns:
-
-        conn.execute(
-            """
+        conn.execute("""
             ALTER TABLE messages
             ADD COLUMN read_by_client
             INTEGER NOT NULL DEFAULT 0
-            """
-        )
+        """)
 
     if "read_by_admin" not in columns:
-
-        conn.execute(
-            """
+        conn.execute("""
             ALTER TABLE messages
             ADD COLUMN read_by_admin
             INTEGER NOT NULL DEFAULT 0
-            """
-        )
+        """)
 
     conn.commit()
-
     conn.close()
 
 
@@ -193,21 +179,16 @@ init_db()
 # =========================================================
 
 def now():
-
     return datetime.utcnow().strftime(
         "%Y-%m-%d %H:%M:%S UTC"
     )
 
 
 def esc(value):
-
-    return escape(
-        str(value or "")
-    )
+    return escape(str(value or ""))
 
 
 def nl2br(value):
-
     return esc(value).replace(
         "\n",
         "<br>",
@@ -215,7 +196,6 @@ def nl2br(value):
 
 
 def get_request(request_id):
-
     conn = db()
 
     row = conn.execute(
@@ -233,7 +213,6 @@ def get_request(request_id):
 
 
 def current_admin_email():
-
     return (
         session.get(
             "admin_email",
@@ -245,26 +224,19 @@ def current_admin_email():
 
 
 def is_admin():
+    email = current_admin_email()
 
     return (
-        bool(
-            session.get(
-                "admin_logged_in"
-            )
-        )
-        and
-        current_admin_email()
-        in ALLOWED_ADMIN_EMAILS
+        session.get("admin_logged_in") is True
+        and email in ALLOWED_ADMIN_EMAILS
     )
 
 
 def admin_required(fn):
-
     @wraps(fn)
     def wrapper(*args, **kwargs):
 
         if not is_admin():
-
             session.clear()
 
             return redirect(
@@ -282,9 +254,7 @@ def admin_required(fn):
 
 
 def resolve_hostname(target):
-
     try:
-
         parsed = urlparse(
             target
             if "://" in target
@@ -301,39 +271,30 @@ def resolve_hostname(target):
         )
 
     except Exception:
-
         return None
 
 
 def resolve_target_ip(target):
-
-    return resolve_hostname(
-        target
-    )
+    return resolve_hostname(target)
 
 
 def status_info(status):
-
     values = {
-
         "PENDING": (
             "PENDING",
             "Request received and waiting for review.",
             "pending",
         ),
-
         "ACCEPTED": (
             "ACCEPTED",
             "Assessment request accepted.",
             "accepted",
         ),
-
         "DECLINED": (
             "DECLINED",
             "Assessment request was declined.",
             "declined",
         ),
-
         "COMPLETED": (
             "COMPLETED",
             "Assessment completed.",
@@ -352,7 +313,7 @@ def status_info(status):
 
 
 # =========================================================
-# NOTIFICATION JAVASCRIPT
+# NOTIFICATIONS
 # =========================================================
 
 NOTIFICATION_SCRIPT = r"""
@@ -411,7 +372,6 @@ NOTIFICATION_SCRIPT = r"""
             if (!matiaAudio) return;
 
             const ctx = matiaAudio;
-
             const start = ctx.currentTime;
 
 
@@ -450,17 +410,15 @@ NOTIFICATION_SCRIPT = r"""
                 );
 
                 osc.connect(gain);
-
-                gain.connect(
-                    ctx.destination
-                );
+                gain.connect(ctx.destination);
 
                 osc.start(
                     start + offset
                 );
 
                 osc.stop(
-                    start + offset +
+                    start +
+                    offset +
                     duration +
                     0.03
                 );
@@ -468,7 +426,6 @@ NOTIFICATION_SCRIPT = r"""
 
 
             tone(880, 0, 0.18);
-
             tone(660, 0.23, 0.22);
 
         } catch (e) {
@@ -499,7 +456,6 @@ NOTIFICATION_SCRIPT = r"""
 
             const permission =
                 await Notification.requestPermission();
-
 
             if (permission === "granted") {
 
@@ -577,9 +533,7 @@ NOTIFICATION_SCRIPT = r"""
         );
 
         if (matiaSoundEnabled) {
-
             initMatiaAudio();
-
             matiaRing();
         }
 
@@ -639,9 +593,7 @@ NOTIFICATION_SCRIPT = r"""
     document.addEventListener(
         "click",
         function () {
-
             initMatiaAudio();
-
         },
         {
             once: true
@@ -654,7 +606,6 @@ NOTIFICATION_SCRIPT = r"""
         function () {
 
             updateSoundButton();
-
             updateNotificationButtons();
 
         }
@@ -666,7 +617,7 @@ NOTIFICATION_SCRIPT = r"""
 
 
 # =========================================================
-# CSS
+# STYLE
 # =========================================================
 
 STYLE = r"""
@@ -692,7 +643,6 @@ STYLE = r"""
 
 body {
     margin: 0;
-
     background:
         radial-gradient(
             circle at top right,
@@ -705,9 +655,7 @@ body {
             transparent 30%
         ),
         var(--bg);
-
     color: var(--text);
-
     font-family:
         Inter,
         ui-sans-serif,
@@ -849,11 +797,8 @@ a {
 
 .hero p {
     color: var(--muted);
-
     max-width: 700px;
-
     font-size: 17px;
-
     line-height: 1.7;
 }
 
@@ -949,69 +894,49 @@ textarea {
 
 .actions {
     display: flex;
-
     gap: 9px;
-
     flex-wrap: wrap;
-
     margin-top: 16px;
 }
 
 .badge {
     display: inline-flex;
-
     padding: 6px 10px;
-
     border-radius: 999px;
-
     font-size: 11px;
-
     font-weight: 900;
-
     letter-spacing: .04em;
 }
 
 .badge.pending {
     background:
         rgba(255,209,102,.10);
-
-    color:
-        var(--yellow);
+    color: var(--yellow);
 }
 
 .badge.accepted {
     background:
         rgba(50,232,117,.10);
-
-    color:
-        var(--green);
+    color: var(--green);
 }
 
 .badge.declined {
     background:
         rgba(255,85,119,.10);
-
-    color:
-        var(--red);
+    color: var(--red);
 }
 
 .badge.completed {
     background:
         rgba(66,232,255,.10);
-
-    color:
-        var(--cyan);
+    color: var(--cyan);
 }
 
 .message-list {
     display: flex;
-
     flex-direction: column;
-
     gap: 10px;
-
     max-height: 450px;
-
     overflow-y: auto;
 }
 
@@ -1065,7 +990,6 @@ textarea {
 
 .severity {
     font-weight: 900;
-
     font-size: 12px;
 }
 
@@ -1089,25 +1013,20 @@ textarea {
 
 table {
     width: 100%;
-
     border-collapse: collapse;
 }
 
 th,
 td {
     padding: 13px;
-
     border-bottom:
         1px solid var(--border);
-
     text-align: left;
-
     white-space: nowrap;
 }
 
 th {
     color: var(--muted);
-
     font-size: 12px;
 }
 
@@ -1132,26 +1051,15 @@ th {
     color: #ff9bb0;
 }
 
-.alert.success {
-    border-color:
-        rgba(50,232,117,.35);
-
-    color: #79f2a4;
-}
-
 .stat {
     font-size: 34px;
-
     font-weight: 900;
 }
 
 .footer {
     text-align: center;
-
     color: #516276;
-
     font-size: 12px;
-
     padding: 30px 0;
 }
 
@@ -1159,14 +1067,12 @@ th {
 
     .nav {
         align-items: flex-start;
-
         flex-direction: column;
     }
 
     .hero {
         padding-top: 25px;
     }
-
 }
 
 </style>
@@ -1174,7 +1080,7 @@ th {
 
 
 # =========================================================
-# PAGE WRAPPER
+# PAGE
 # =========================================================
 
 def page(
@@ -1506,7 +1412,6 @@ def create_request():
             request_id = cur.lastrowid
 
             conn.commit()
-
             conn.close()
 
             return redirect(
@@ -1517,15 +1422,15 @@ def create_request():
             )
 
 
-    error_html = (
-        """
+    error_html = ""
+
+    if error:
+
+        error_html = """
 <div class="alert error">
-""" + esc(error) + """
+%s
 </div>
-"""
-        if error
-        else ""
-    )
+""" % esc(error)
 
 
     body = """
@@ -1535,7 +1440,8 @@ def create_request():
 Submit only systems you own or have explicit permission
 to assess.
 </p>
-""" + error_html + """
+
+%s
 
 <div class="card">
 
@@ -1549,7 +1455,6 @@ to assess.
     autocomplete="name"
 >
 
-
 <label>Email</label>
 
 <input
@@ -1559,7 +1464,6 @@ to assess.
     autocomplete="email"
 >
 
-
 <label>Target</label>
 
 <input
@@ -1568,7 +1472,6 @@ to assess.
     required
 >
 
-
 <label>Authorized Scope</label>
 
 <textarea
@@ -1576,7 +1479,6 @@ to assess.
     placeholder="Example: web application, port 443, authenticated test account..."
     required
 ></textarea>
-
 
 <label>
 
@@ -1591,7 +1493,6 @@ to assess.
 I confirm that I am authorized to request this assessment.
 
 </label>
-
 
 <div class="actions">
 
@@ -1614,7 +1515,7 @@ I confirm that I am authorized to request this assessment.
 </form>
 
 </div>
-"""
+""" % error_html
 
     return page(
         "New Request",
@@ -1631,22 +1532,17 @@ I confirm that I am authorized to request this assessment.
 )
 def client_status(request_id):
 
-    req = get_request(
-        request_id
-    )
+    req = get_request(request_id)
 
     if not req:
-
         return (
             "Request not found",
             404,
         )
 
-
     status, description, css = status_info(
         req["status"]
     )
-
 
     conn = db()
 
@@ -1660,7 +1556,6 @@ def client_status(request_id):
         (request_id,),
     ).fetchall()
 
-
     findings = conn.execute(
         """
         SELECT *
@@ -1671,12 +1566,9 @@ def client_status(request_id):
         (request_id,),
     ).fetchall()
 
-
     conn.close()
 
-
     message_html = ""
-
 
     for msg in messages:
 
@@ -1713,7 +1605,6 @@ def client_status(request_id):
             nl2br(msg["message"]),
         )
 
-
     if not message_html:
 
         message_html = """
@@ -1722,9 +1613,7 @@ No messages yet.
 </div>
 """
 
-
     findings_html = ""
-
 
     for finding in findings:
 
@@ -1777,7 +1666,6 @@ No messages yet.
             nl2br(finding["recommendation"]),
         )
 
-
     if not findings_html:
 
         findings_html = """
@@ -1786,16 +1674,12 @@ No findings published yet.
 </div>
 """
 
-
     scripts = """
 <script>
 
 let lastMessageId = 0;
-
 let firstClientPoll = true;
-
-let lastStatus = %s;
-
+let lastStatus = %r;
 
 async function checkClientNotifications() {
 
@@ -1809,10 +1693,8 @@ async function checkClientNotifications() {
                 }
             );
 
-
         const data =
             await response.json();
-
 
         if (firstClientPoll) {
 
@@ -1828,7 +1710,6 @@ async function checkClientNotifications() {
             return;
         }
 
-
         if (
             data.latest_id &&
             data.latest_id >
@@ -1840,9 +1721,7 @@ async function checkClientNotifications() {
             lastMessageId =
                 data.latest_id;
 
-
             matiaRing();
-
 
             matiaDesktopNotification(
                 "🔔 MATIA // SECURITY CHECK",
@@ -1850,10 +1729,8 @@ async function checkClientNotifications() {
                 "You received a new message."
             );
 
-
             location.reload();
         }
-
 
         if (
             data.status &&
@@ -1863,16 +1740,13 @@ async function checkClientNotifications() {
             lastStatus =
                 data.status;
 
-
             matiaRing();
-
 
             matiaDesktopNotification(
                 "⚡ Assessment Status Updated",
                 "Status changed to " +
                 data.status
             );
-
 
             location.reload();
         }
@@ -1882,24 +1756,20 @@ async function checkClientNotifications() {
         console.log(e);
 
     }
-
 }
-
 
 setInterval(
     checkClientNotifications,
     2500
 );
 
-
 checkClientNotifications();
 
 </script>
 """ % (
-        repr(req["status"]),
+        req["status"],
         request_id,
     )
-
 
     body = """
 <div
@@ -1918,7 +1788,6 @@ Client Workspace
 </h1>
 
 </div>
-
 
 <span class="badge %s">
 %s
@@ -2023,7 +1892,6 @@ Secure Chat
 
 </div>
 
-
 <form
     method="post"
     action="/status/%s/message"
@@ -2035,14 +1903,13 @@ Secure Chat
     required
 ></textarea>
 
-
 <div class="actions">
 
 <button
     class="btn primary"
     type="submit"
 >
-    SEND MESSAGE
+SEND MESSAGE
 </button>
 
 </div>
@@ -2068,7 +1935,10 @@ Security Findings
         css,
         esc(status),
         esc(req["target"]),
-        esc(req["target_ip"] or "Not resolved"),
+        esc(
+            req["target_ip"]
+            or "Not resolved"
+        ),
         esc(status),
         esc(description),
         esc(req["created"]),
@@ -2078,7 +1948,6 @@ Security Findings
         request_id,
         findings_html,
     )
-
 
     return page(
         "Request #%s" % request_id,
@@ -2102,18 +1971,15 @@ def client_message(request_id):
     )
 
     if not req:
-
         return (
             "Request not found",
             404,
         )
 
-
     message = request.form.get(
         "message",
         "",
     ).strip()
-
 
     if message:
 
@@ -2143,9 +2009,7 @@ def client_message(request_id):
         )
 
         conn.commit()
-
         conn.close()
-
 
     return redirect(
         url_for(
@@ -2156,7 +2020,7 @@ def client_message(request_id):
 
 
 # =========================================================
-# CLIENT STATUS API
+# CLIENT APIS
 # =========================================================
 
 @app.route(
@@ -2164,9 +2028,7 @@ def client_message(request_id):
 )
 def client_status_api(request_id):
 
-    req = get_request(
-        request_id
-    )
+    req = get_request(request_id)
 
     if not req:
 
@@ -2175,25 +2037,14 @@ def client_status_api(request_id):
             "error": "not_found",
         }), 404
 
-
     return jsonify({
-
         "ok": True,
-
         "id": req["id"],
-
         "status": req["status"],
-
         "target": req["target"],
-
         "target_ip": req["target_ip"],
-
     })
 
-
-# =========================================================
-# CLIENT MESSAGES API
-# =========================================================
 
 @app.route(
     "/api/client/<int:request_id>/messages"
@@ -2216,7 +2067,6 @@ def client_messages_api(request_id):
         (request_id,),
     ).fetchall()
 
-
     conn.execute(
         """
         UPDATE messages
@@ -2227,25 +2077,16 @@ def client_messages_api(request_id):
         (request_id,),
     )
 
-
     conn.commit()
-
     conn.close()
 
-
     return jsonify({
-
         "messages": [
             dict(row)
             for row in rows
         ]
-
     })
 
-
-# =========================================================
-# CLIENT NOTIFICATIONS API
-# =========================================================
 
 @app.route(
     "/api/client/<int:request_id>/notifications"
@@ -2263,7 +2104,6 @@ def client_notifications(request_id):
         (request_id,),
     ).fetchone()
 
-
     latest = conn.execute(
         """
         SELECT *
@@ -2275,9 +2115,7 @@ def client_notifications(request_id):
         (request_id,),
     ).fetchone()
 
-
     conn.close()
-
 
     if not req:
 
@@ -2285,28 +2123,21 @@ def client_notifications(request_id):
             "ok": False
         }), 404
 
-
     return jsonify({
-
         "ok": True,
-
         "status": req["status"],
-
         "latest_id":
             latest["id"]
             if latest
             else 0,
-
         "latest_sender":
             latest["sender"]
             if latest
             else None,
-
         "latest_message":
             latest["message"]
             if latest
             else "",
-
     })
 
 
@@ -2319,8 +2150,7 @@ def google_login():
 
     if (
         not GOOGLE_CLIENT_ID
-        or
-        not GOOGLE_CLIENT_SECRET
+        or not GOOGLE_CLIENT_SECRET
     ):
 
         body = """
@@ -2340,11 +2170,6 @@ CONFIGURATION ERROR
 <h1>
 Google Authentication Not Configured
 </h1>
-
-<p class="muted">
-The administrator authentication system requires
-Google OAuth configuration.
-</p>
 
 <p class="muted">
 Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET
@@ -2368,12 +2193,10 @@ RETURN HOME
             body,
         ), 500
 
-
     redirect_uri = url_for(
         "google_callback",
         _external=True,
     )
-
 
     return google.authorize_redirect(
         redirect_uri
@@ -2402,32 +2225,45 @@ def google_callback():
             or ""
         ).strip().lower()
 
-
-        email_verified = bool(
-            user.get(
-                "email_verified",
-                False,
-            )
+        email_verified = user.get(
+            "email_verified",
+            True,
         )
 
+        if isinstance(
+            email_verified,
+            str,
+        ):
+            email_verified = (
+                email_verified.lower()
+                == "true"
+            )
 
-        # BOTH ACCOUNTS ARE ACCEPTED
+        print(
+            "GOOGLE LOGIN EMAIL:",
+            email,
+        )
+
+        print(
+            "EMAIL VERIFIED:",
+            email_verified,
+        )
+
+        print(
+            "EMAIL ALLOWED:",
+            email in ALLOWED_ADMIN_EMAILS,
+        )
+
         if (
             email not in ALLOWED_ADMIN_EMAILS
-            or
-            not email_verified
+            or not email_verified
         ):
 
             session.clear()
 
-            body = """
-<div
-    style="
-        max-width:650px;
-        margin:60px auto
-    "
->
-
+            return page(
+                "Access Denied",
+                """
 <div class="card">
 
 <div class="badge declined">
@@ -2451,28 +2287,25 @@ RETURN HOME
 </a>
 
 </div>
-
-</div>
-"""
-
-            return page(
-                "Access Denied",
-                body,
+""",
             ), 403
-
 
         session.clear()
 
         session["admin_logged_in"] = True
-
         session["admin_email"] = email
-
         session["admin_name"] = (
             user.get("name")
             or user.get("given_name")
             or email
         )
 
+        session.permanent = True
+
+        print(
+            "ADMIN LOGIN SUCCESS:",
+            email,
+        )
 
         return redirect(
             url_for(
@@ -2480,19 +2313,18 @@ RETURN HOME
             )
         )
 
+    except Exception as e:
 
-    except Exception:
+        print(
+            "GOOGLE AUTH ERROR:",
+            repr(e),
+        )
 
         session.clear()
 
-        body = """
-<div
-    style="
-        max-width:650px;
-        margin:60px auto
-    "
->
-
+        return page(
+            "Authentication Error",
+            """
 <div class="card">
 
 <div class="badge declined">
@@ -2516,13 +2348,7 @@ RETURN HOME
 </a>
 
 </div>
-
-</div>
-"""
-
-        return page(
-            "Authentication Error",
-            body,
+""",
         ), 500
 
 
@@ -2553,7 +2379,6 @@ def admin_notifications():
         """
     ).fetchone()
 
-
     unread = conn.execute(
         """
         SELECT COUNT(*)
@@ -2563,41 +2388,31 @@ def admin_notifications():
         """
     ).fetchone()[0]
 
-
     conn.close()
 
-
     return jsonify({
-
         "ok": True,
-
         "unread": unread,
-
         "latest_id":
             latest["id"]
             if latest
             else 0,
-
         "latest_sender":
             latest["sender"]
             if latest
             else None,
-
         "latest_message":
             latest["message"]
             if latest
             else "",
-
         "client_name":
             latest["name"]
             if latest
             else "",
-
         "target":
             latest["target"]
             if latest
             else "",
-
     })
 
 
@@ -2619,16 +2434,14 @@ def admin_dashboard():
         """
     ).fetchall()
 
-
     stats = {}
 
-
-    for status in [
+    for status in (
         "PENDING",
         "ACCEPTED",
         "DECLINED",
         "COMPLETED",
-    ]:
+    ):
 
         stats[status] = conn.execute(
             """
@@ -2639,19 +2452,15 @@ def admin_dashboard():
             (status,),
         ).fetchone()[0]
 
-
     conn.close()
 
-
     rows_html = ""
-
 
     for req in requests_rows:
 
         _, _, css = status_info(
             req["status"]
         )
-
 
         rows_html += """
 <tr>
@@ -2717,15 +2526,13 @@ def admin_dashboard():
             esc(req["target"]),
             esc(
                 req["target_ip"]
-                or
-                "unresolved"
+                or "unresolved"
             ),
             css,
             esc(req["status"]),
             esc(req["created"]),
             req["id"],
         )
-
 
     if not rows_html:
 
@@ -2742,14 +2549,11 @@ No requests yet.
 </tr>
 """
 
-
     scripts = r"""
 <script>
 
 let adminLastMessageId = 0;
-
 let adminFirstPoll = true;
-
 
 async function adminNotificationPoll() {
 
@@ -2763,10 +2567,8 @@ async function adminNotificationPoll() {
                 }
             );
 
-
         const data =
             await response.json();
-
 
         if (adminFirstPoll) {
 
@@ -2778,7 +2580,6 @@ async function adminNotificationPoll() {
             return;
         }
 
-
         if (
             data.latest_id &&
             data.latest_id >
@@ -2788,9 +2589,7 @@ async function adminNotificationPoll() {
             adminLastMessageId =
                 data.latest_id;
 
-
             matiaRing();
-
 
             matiaDesktopNotification(
                 "🔔 MATIA // SECURITY CHECK",
@@ -2801,7 +2600,6 @@ async function adminNotificationPoll() {
                 " sent a new message."
             );
 
-
             location.reload();
         }
 
@@ -2810,21 +2608,17 @@ async function adminNotificationPoll() {
         console.log(e);
 
     }
-
 }
-
 
 setInterval(
     adminNotificationPoll,
     2500
 );
 
-
 adminNotificationPoll();
 
 </script>
 """
-
 
     admin_name = (
         session.get(
@@ -2837,7 +2631,6 @@ adminNotificationPoll();
         or
         "Administrator"
     )
-
 
     body = """
 <div
@@ -2860,7 +2653,6 @@ Welcome, %s.
 </p>
 
 </div>
-
 
 <div class="actions">
 
@@ -2977,7 +2769,6 @@ DECLINED
         rows_html,
     )
 
-
     return page(
         "Admin",
         body,
@@ -3000,14 +2791,11 @@ def admin_request(request_id):
         request_id
     )
 
-
     if not req:
-
         return (
             "Request not found",
             404,
         )
-
 
     if request.method == "POST":
 
@@ -3015,13 +2803,11 @@ def admin_request(request_id):
             "action"
         )
 
-
         allowed = {
             "ACCEPTED",
             "DECLINED",
             "COMPLETED",
         }
-
 
         if action in allowed:
 
@@ -3040,16 +2826,13 @@ def admin_request(request_id):
             )
 
             conn.commit()
-
             conn.close()
 
             req = get_request(
                 request_id
             )
 
-
     conn = db()
-
 
     messages = conn.execute(
         """
@@ -3061,7 +2844,6 @@ def admin_request(request_id):
         (request_id,),
     ).fetchall()
 
-
     findings = conn.execute(
         """
         SELECT *
@@ -3071,7 +2853,6 @@ def admin_request(request_id):
         """,
         (request_id,),
     ).fetchall()
-
 
     conn.execute(
         """
@@ -3083,20 +2864,14 @@ def admin_request(request_id):
         (request_id,),
     )
 
-
     conn.commit()
-
     conn.close()
 
-
-    status, description, css = \
-        status_info(
-            req["status"]
-        )
-
+    status, description, css = status_info(
+        req["status"]
+    )
 
     message_html = ""
-
 
     for msg in messages:
 
@@ -3105,7 +2880,6 @@ def admin_request(request_id):
             if msg["sender"] == "client"
             else "admin"
         )
-
 
         message_html += """
 <div class="message %s">
@@ -3134,7 +2908,6 @@ def admin_request(request_id):
             nl2br(msg["message"]),
         )
 
-
     if not message_html:
 
         message_html = """
@@ -3143,16 +2916,13 @@ No messages.
 </div>
 """
 
-
     findings_html = ""
-
 
     for finding in findings:
 
         severity = esc(
             finding["severity"].upper()
         )
-
 
         findings_html += """
 <div class="finding">
@@ -3163,55 +2933,38 @@ No messages.
 %s
 </strong>
 
-<span
-    class="severity %s"
->
+<span class="severity %s">
 %s
 </span>
 
 </div>
 
-
 <h3>
 %s
 </h3>
-
 
 <p>
 <strong>
 Evidence
 </strong>
-
 <br>
-
 %s
-
 </p>
 
-
 <p>
-
 <strong>
 Impact
 </strong>
-
 <br>
-
 %s
-
 </p>
 
-
 <p>
-
 <strong>
 Recommendation
 </strong>
-
 <br>
-
 %s
-
 </p>
 
 </div>
@@ -3225,7 +2978,6 @@ Recommendation
             nl2br(finding["recommendation"]),
         )
 
-
     if not findings_html:
 
         findings_html = """
@@ -3233,7 +2985,6 @@ Recommendation
 No findings added yet.
 </div>
 """
-
 
     body = """
 <div
@@ -3573,7 +3324,6 @@ GENERATE REPORT
         findings_html,
     )
 
-
     return page(
         "Request #%s" % request_id,
         body,
@@ -3595,20 +3345,16 @@ def admin_message(request_id):
         request_id
     )
 
-
     if not req:
-
         return (
             "Request not found",
             404,
         )
 
-
     message = request.form.get(
         "message",
         "",
     ).strip()
-
 
     if message:
 
@@ -3638,9 +3384,7 @@ def admin_message(request_id):
         )
 
         conn.commit()
-
         conn.close()
-
 
     return redirect(
         url_for(
@@ -3662,7 +3406,6 @@ def admin_messages_api(request_id):
 
     conn = db()
 
-
     rows = conn.execute(
         """
         SELECT
@@ -3677,7 +3420,6 @@ def admin_messages_api(request_id):
         (request_id,),
     ).fetchall()
 
-
     conn.execute(
         """
         UPDATE messages
@@ -3688,19 +3430,14 @@ def admin_messages_api(request_id):
         (request_id,),
     )
 
-
     conn.commit()
-
     conn.close()
 
-
     return jsonify({
-
         "messages": [
             dict(row)
             for row in rows
         ]
-
     })
 
 
@@ -3719,50 +3456,41 @@ def add_finding(request_id):
         request_id
     )
 
-
     if not req:
-
         return (
             "Request not found",
             404,
         )
-
 
     code = request.form.get(
         "code",
         "",
     ).strip()
 
-
     title = request.form.get(
         "title",
         "",
     ).strip()
-
 
     severity = request.form.get(
         "severity",
         "INFO",
     ).strip().upper()
 
-
     evidence = request.form.get(
         "evidence",
         "",
     ).strip()
-
 
     impact = request.form.get(
         "impact",
         "",
     ).strip()
 
-
     recommendation = request.form.get(
         "recommendation",
         "",
     ).strip()
-
 
     allowed_severity = {
         "INFO",
@@ -3772,11 +3500,8 @@ def add_finding(request_id):
         "CRITICAL",
     }
 
-
     if severity not in allowed_severity:
-
         severity = "INFO"
-
 
     if (
         code
@@ -3814,9 +3539,7 @@ def add_finding(request_id):
         )
 
         conn.commit()
-
         conn.close()
-
 
     return redirect(
         url_for(
@@ -3840,17 +3563,13 @@ def report(request_id):
         request_id
     )
 
-
     if not req:
-
         return (
             "Request not found",
             404,
         )
 
-
     conn = db()
-
 
     findings = conn.execute(
         """
@@ -3862,12 +3581,9 @@ def report(request_id):
         (request_id,),
     ).fetchall()
 
-
     conn.close()
 
-
     findings_html = ""
-
 
     for finding in findings:
 
@@ -3880,63 +3596,30 @@ def report(request_id):
 ">
 
 <h3>
-
-%s
-
-—
-
-%s
-
+%s — %s
 </h3>
 
-
 <p>
-
-<strong>
-Severity:
-</strong>
-
+<strong>Severity:</strong>
 %s
-
 </p>
 
-
 <p>
-
-<strong>
-Evidence
-</strong>
-
+<strong>Evidence</strong>
 <br>
-
 %s
-
 </p>
 
-
 <p>
-
-<strong>
-Impact
-</strong>
-
+<strong>Impact</strong>
 <br>
-
 %s
-
 </p>
 
-
 <p>
-
-<strong>
-Recommendation
-</strong>
-
+<strong>Recommendation</strong>
 <br>
-
 %s
-
 </p>
 
 </section>
@@ -3949,7 +3632,6 @@ Recommendation
             nl2br(finding["recommendation"]),
         )
 
-
     if not findings_html:
 
         findings_html = """
@@ -3957,7 +3639,6 @@ Recommendation
 No findings have been documented.
 </p>
 """
-
 
     report_html = """
 <!doctype html>
@@ -3972,11 +3653,9 @@ No findings have been documented.
 Security Assessment Report #%s
 </title>
 
-
 <style>
 
 body {
-
     font-family:
         Arial,
         Helvetica,
@@ -3998,21 +3677,14 @@ body {
         1.6;
 }
 
-
 h1 {
     margin-bottom:5px;
 }
 
-
 .meta {
-
-    color:
-        #5d6d7e;
-
-    margin-bottom:
-        35px;
+    color:#5d6d7e;
+    margin-bottom:35px;
 }
-
 
 @media print {
 
@@ -4023,16 +3695,13 @@ h1 {
     .print {
         display:none;
     }
-
 }
 
 </style>
 
 </head>
 
-
 <body>
-
 
 <button
     class="print"
@@ -4041,16 +3710,13 @@ h1 {
 PRINT / SAVE PDF
 </button>
 
-
 <h1>
 MATIA // SECURITY CHECK
 </h1>
 
-
 <h2>
 Authorized Security Assessment Report
 </h2>
-
 
 <div class="meta">
 
@@ -4062,7 +3728,6 @@ Request:
 
 <br>
 
-
 <strong>
 Client:
 </strong>
@@ -4070,7 +3735,6 @@ Client:
 %s
 
 <br>
-
 
 <strong>
 Email:
@@ -4080,7 +3744,6 @@ Email:
 
 <br>
 
-
 <strong>
 Target:
 </strong>
@@ -4088,7 +3751,6 @@ Target:
 %s
 
 <br>
-
 
 <strong>
 Resolved IP:
@@ -4098,7 +3760,6 @@ Resolved IP:
 
 <br>
 
-
 <strong>
 Status:
 </strong>
@@ -4106,7 +3767,6 @@ Status:
 %s
 
 <br>
-
 
 <strong>
 Created:
@@ -4116,34 +3776,25 @@ Created:
 
 </div>
 
-
 <h2>
 Authorized Scope
 </h2>
 
-
 <p>
-
 %s
-
 </p>
-
 
 <h2>
 Findings
 </h2>
 
-
 %s
 
-
 <hr>
-
 
 <p class="meta">
 Generated by MATIA // SECURITY CHECK
 </p>
-
 
 </body>
 
@@ -4156,8 +3807,7 @@ Generated by MATIA // SECURITY CHECK
         esc(req["target"]),
         esc(
             req["target_ip"]
-            or
-            "Not resolved"
+            or "Not resolved"
         ),
         esc(req["status"]),
         esc(req["created"]),
@@ -4165,12 +3815,11 @@ Generated by MATIA // SECURITY CHECK
         findings_html,
     )
 
-
     return report_html
 
 
 # =========================================================
-# ADMIN LOGOUT
+# LOGOUT
 # =========================================================
 
 @app.route(
@@ -4191,11 +3840,7 @@ def admin_logout():
 
 @app.route("/favicon.ico")
 def favicon():
-
-    return (
-        "",
-        204,
-    )
+    return "", 204
 
 
 # =========================================================
@@ -4283,54 +3928,27 @@ if __name__ == "__main__":
         )
     )
 
-
     print()
-
     print("=" * 62)
-
-    print(
-        "        MATIA // SECURITY CHECK"
-    )
-
+    print("        MATIA // SECURITY CHECK")
     print("=" * 62)
-
+    print(" Status : ONLINE")
+    print(" Host   : 0.0.0.0")
+    print(" Port   :", port)
+    print(" DB     :", DB_FILE)
+    print(" Admin  : Google OAuth")
+    print(" Access : Restricted")
     print(
-        " Status : ONLINE"
+        " Admins : "
+        "kleimatia1@gmail.com + "
+        "vantyx199@gmail.com"
     )
-
-    print(
-        " Host   : 0.0.0.0"
-    )
-
-    print(
-        " Port   :",
-        port,
-    )
-
-    print(
-        " DB     :",
-        DB_FILE,
-    )
-
-    print(
-        " Admin  : Google OAuth"
-    )
-
-    print(
-        " Access : Restricted"
-    )
-
-    print(
-        " Admins : kleimatia1@gmail.com + vantyx199@gmail.com"
-    )
-
     print("=" * 62)
-
     print()
-
 
     app.run(
         host="0.0.0.0",
         port=port,
         debug=False,
     )
+```
