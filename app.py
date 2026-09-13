@@ -22,7 +22,7 @@ from authlib.integrations.flask_client import OAuth
 
 # =========================================================
 # MATIA // SECURITY CHECK
-# FULL APP — GOOGLE ADMIN AUTH
+# GOOGLE ADMIN AUTH
 # =========================================================
 
 app = Flask(__name__)
@@ -39,20 +39,24 @@ if not SECRET_KEY:
 
 DB_FILE = os.environ.get(
     "MATIA_DB_FILE",
-    "matia_security.db"
+    "matia_security.db",
 )
 
 GOOGLE_CLIENT_ID = os.environ.get(
     "GOOGLE_CLIENT_ID",
-    ""
+    "",
 )
 
 GOOGLE_CLIENT_SECRET = os.environ.get(
     "GOOGLE_CLIENT_SECRET",
-    ""
+    "",
 )
 
-ALLOWED_ADMIN_EMAIL = "kleimatia1@gmail.com"
+# BOTH GOOGLE ACCOUNTS ARE ALLOWED
+ALLOWED_ADMIN_EMAILS = {
+    "kleimatia1@gmail.com",
+    "vantyx199@gmail.com",
+}
 
 
 app.config["SECRET_KEY"] = SECRET_KEY
@@ -64,7 +68,7 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = (
     os.environ.get(
         "SESSION_COOKIE_SECURE",
-        "1"
+        "1",
     ) == "1"
 )
 
@@ -84,7 +88,7 @@ google = oauth.register(
         ".well-known/openid-configuration"
     ),
     client_kwargs={
-        "scope": "openid email profile"
+        "scope": "openid email profile",
     },
 )
 
@@ -202,6 +206,14 @@ def esc(value):
     )
 
 
+def nl2br(value):
+
+    return esc(value).replace(
+        "\n",
+        "<br>",
+    )
+
+
 def get_request(request_id):
 
     conn = db()
@@ -220,37 +232,51 @@ def get_request(request_id):
     return row
 
 
+def current_admin_email():
+
+    return (
+        session.get(
+            "admin_email",
+            "",
+        )
+        .strip()
+        .lower()
+    )
+
+
+def is_admin():
+
+    return (
+        bool(
+            session.get(
+                "admin_logged_in"
+            )
+        )
+        and
+        current_admin_email()
+        in ALLOWED_ADMIN_EMAILS
+    )
+
+
 def admin_required(fn):
 
     @wraps(fn)
     def wrapper(*args, **kwargs):
 
-        if not session.get(
-            "admin_logged_in"
-        ):
-
-            return redirect(
-                url_for("google_login")
-            )
-
-        email = (
-            session.get(
-                "admin_email",
-                ""
-            )
-            .strip()
-            .lower()
-        )
-
-        if email != ALLOWED_ADMIN_EMAIL:
+        if not is_admin():
 
             session.clear()
 
             return redirect(
-                url_for("google_login")
+                url_for(
+                    "google_login"
+                )
             )
 
-        return fn(*args, **kwargs)
+        return fn(
+            *args,
+            **kwargs
+        )
 
     return wrapper
 
@@ -281,7 +307,9 @@ def resolve_hostname(target):
 
 def resolve_target_ip(target):
 
-    return resolve_hostname(target)
+    return resolve_hostname(
+        target
+    )
 
 
 def status_info(status):
@@ -368,7 +396,6 @@ NOTIFICATION_SCRIPT = r"""
                 "Audio initialization failed:",
                 e
             );
-
         }
     }
 
@@ -450,7 +477,6 @@ NOTIFICATION_SCRIPT = r"""
                 "Ring failed:",
                 e
             );
-
         }
     };
 
@@ -533,7 +559,6 @@ NOTIFICATION_SCRIPT = r"""
                 "Notification failed:",
                 e
             );
-
         }
     };
 
@@ -1130,23 +1155,6 @@ th {
     padding: 30px 0;
 }
 
-.pulse {
-    animation:
-        pulse 1.7s infinite;
-}
-
-@keyframes pulse {
-
-    0%,100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: .42;
-    }
-
-}
-
 @media (max-width: 700px) {
 
     .nav {
@@ -1172,19 +1180,12 @@ th {
 def page(
     title,
     body,
-    scripts=""
+    scripts="",
 ):
 
     admin_nav = ""
 
-    if (
-        session.get("admin_logged_in")
-        and
-        session.get("admin_email", "")
-        .strip()
-        .lower()
-        == ALLOWED_ADMIN_EMAIL
-    ):
+    if is_admin():
 
         admin_nav = """
 <a
@@ -1202,9 +1203,7 @@ def page(
 </a>
 """
 
-
-    return render_template_string(
-        f"""
+    template = """
 <!doctype html>
 
 <html lang="en">
@@ -1220,12 +1219,12 @@ def page(
 >
 
 <title>
-{esc(title)}
+{{ title }}
 |
 MATIA // SECURITY CHECK
 </title>
 
-{STYLE}
+{{ style|safe }}
 
 </head>
 
@@ -1234,7 +1233,7 @@ MATIA // SECURITY CHECK
 <nav class="nav">
 
 <a
-    href="{url_for('home')}"
+    href="/"
     class="logo"
 >
     MATIA <span>//</span> SECURITY CHECK
@@ -1242,7 +1241,7 @@ MATIA // SECURITY CHECK
 
 <div class="nav-right">
 
-{admin_nav}
+{{ admin_nav|safe }}
 
 <button
     class="btn"
@@ -1270,7 +1269,7 @@ MATIA // SECURITY CHECK
 
 <main class="container">
 
-{body}
+{{ body|safe }}
 
 </main>
 
@@ -1281,14 +1280,23 @@ MATIA // SECURITY CHECK
 
 </footer>
 
-{scripts}
+{{ scripts|safe }}
 
-{NOTIFICATION_SCRIPT}
+{{ notification_script|safe }}
 
 </body>
 
 </html>
 """
+
+    return render_template_string(
+        template,
+        title=title,
+        style=STYLE,
+        admin_nav=admin_nav,
+        body=body,
+        scripts=scripts,
+        notification_script=NOTIFICATION_SCRIPT,
     )
 
 
@@ -1301,14 +1309,7 @@ def home():
 
     admin_button = ""
 
-    if (
-        session.get("admin_logged_in")
-        and
-        session.get("admin_email", "")
-        .strip()
-        .lower()
-        == ALLOWED_ADMIN_EMAIL
-    ):
+    if is_admin():
 
         admin_button = """
 <a
@@ -1319,7 +1320,7 @@ def home():
 </a>
 """
 
-    body = f"""
+    body = """
 <section class="hero">
 
 <div class="badge completed">
@@ -1347,7 +1348,7 @@ def home():
     + NEW SECURITY REQUEST
 </a>
 
-{admin_button}
+""" + admin_button + """
 
 </div>
 
@@ -1408,7 +1409,7 @@ professional security report.
 
     return page(
         "Home",
-        body
+        body,
     )
 
 
@@ -1418,7 +1419,7 @@ professional security report.
 
 @app.route(
     "/request",
-    methods=["GET", "POST"]
+    methods=["GET", "POST"],
 )
 def create_request():
 
@@ -1428,28 +1429,27 @@ def create_request():
 
         name = request.form.get(
             "name",
-            ""
+            "",
         ).strip()
 
         email = request.form.get(
             "email",
-            ""
+            "",
         ).strip()
 
         target = request.form.get(
             "target",
-            ""
+            "",
         ).strip()
 
         scope = request.form.get(
             "scope",
-            ""
+            "",
         ).strip()
 
         authorized = request.form.get(
             "authorized"
         )
-
 
         if (
             not name
@@ -1512,31 +1512,30 @@ def create_request():
             return redirect(
                 url_for(
                     "client_status",
-                    request_id=request_id
+                    request_id=request_id,
                 )
             )
 
 
     error_html = (
-        f"""
-        <div class="alert error">
-            {esc(error)}
-        </div>
         """
+<div class="alert error">
+""" + esc(error) + """
+</div>
+"""
         if error
         else ""
     )
 
 
-    body = f"""
+    body = """
 <h1>New Security Request</h1>
 
 <p class="muted">
 Submit only systems you own or have explicit permission
 to assess.
 </p>
-
-{error_html}
+""" + error_html + """
 
 <div class="card">
 
@@ -1619,7 +1618,7 @@ I confirm that I am authorized to request this assessment.
 
     return page(
         "New Request",
-        body
+        body,
     )
 
 
@@ -1640,14 +1639,13 @@ def client_status(request_id):
 
         return (
             "Request not found",
-            404
+            404,
         )
 
 
-    status, description, css = \
-        status_info(
-            req["status"]
-        )
+    status, description, css = status_info(
+        req["status"]
+    )
 
 
     conn = db()
@@ -1688,31 +1686,32 @@ def client_status(request_id):
             else "client"
         )
 
-
-        message_html += f"""
-<div class="message {cls}">
+        message_html += """
+<div class="message %s">
 
 <div class="message-meta">
 
 <span>
-{esc(msg["sender"].upper())}
+%s
 </span>
 
 <span>
-{esc(msg["created"])}
+%s
 </span>
 
 </div>
 
 <div>
-{
-    esc(msg["message"])
-    .replace(chr(10), "<br>")
-}
+%s
 </div>
 
 </div>
-"""
+""" % (
+            cls,
+            esc(msg["sender"].upper()),
+            esc(msg["created"]),
+            nl2br(msg["message"]),
+        )
 
 
     if not message_html:
@@ -1729,54 +1728,54 @@ No messages yet.
 
     for finding in findings:
 
-        findings_html += f"""
+        severity = esc(
+            finding["severity"].upper()
+        )
+
+        findings_html += """
 <div class="finding">
 
 <div class="message-meta">
 
 <strong>
-{esc(finding["code"])}
+%s
 </strong>
 
-<span
-    class="severity
-    {esc(finding["severity"].upper())}"
->
-{esc(finding["severity"].upper())}
+<span class="severity %s">
+%s
 </span>
 
 </div>
 
 <h3>
-{esc(finding["title"])}
+%s
 </h3>
 
 <p>
 <strong>Evidence</strong><br>
-{
-    esc(finding["evidence"])
-    .replace(chr(10), "<br>")
-}
+%s
 </p>
 
 <p>
 <strong>Impact</strong><br>
-{
-    esc(finding["impact"])
-    .replace(chr(10), "<br>")
-}
+%s
 </p>
 
 <p>
 <strong>Recommendation</strong><br>
-{
-    esc(finding["recommendation"])
-    .replace(chr(10), "<br>")
-}
+%s
 </p>
 
 </div>
-"""
+""" % (
+            esc(finding["code"]),
+            severity,
+            severity,
+            esc(finding["title"]),
+            nl2br(finding["evidence"]),
+            nl2br(finding["impact"]),
+            nl2br(finding["recommendation"]),
+        )
 
 
     if not findings_html:
@@ -1788,27 +1787,26 @@ No findings published yet.
 """
 
 
-    scripts = f"""
+    scripts = """
 <script>
 
 let lastMessageId = 0;
 
 let firstClientPoll = true;
 
-let lastStatus =
-    "{esc(req["status"])}";
+let lastStatus = %s;
 
 
-async function checkClientNotifications() {{
+async function checkClientNotifications() {
 
-    try {{
+    try {
 
         const response =
             await fetch(
-                "/api/client/{request_id}/notifications",
-                {{
+                "/api/client/%s/notifications",
+                {
                     cache: "no-store"
-                }}
+                }
             );
 
 
@@ -1816,7 +1814,7 @@ async function checkClientNotifications() {{
             await response.json();
 
 
-        if (firstClientPoll) {{
+        if (firstClientPoll) {
 
             lastMessageId =
                 data.latest_id || 0;
@@ -1837,7 +1835,7 @@ async function checkClientNotifications() {{
             lastMessageId &&
             data.latest_sender ===
             "matia"
-        ) {{
+        ) {
 
             lastMessageId =
                 data.latest_id;
@@ -1854,13 +1852,13 @@ async function checkClientNotifications() {{
 
 
             location.reload();
-        }}
+        }
 
 
         if (
             data.status &&
             data.status !== lastStatus
-        ) {{
+        ) {
 
             lastStatus =
                 data.status;
@@ -1877,13 +1875,13 @@ async function checkClientNotifications() {{
 
 
             location.reload();
-        }}
+        }
 
-    }} catch (e) {{
+    } catch (e) {
 
         console.log(e);
 
-    }}
+    }
 
 }
 
@@ -1897,10 +1895,13 @@ setInterval(
 checkClientNotifications();
 
 </script>
-"""
+""" % (
+        repr(req["status"]),
+        request_id,
+    )
 
 
-    body = f"""
+    body = """
 <div
     class="actions"
     style="justify-content:space-between"
@@ -1909,7 +1910,7 @@ checkClientNotifications();
 <div>
 
 <div class="muted">
-SECURITY REQUEST #{req["id"]}
+SECURITY REQUEST #%s
 </div>
 
 <h1 style="margin:5px 0">
@@ -1919,8 +1920,8 @@ Client Workspace
 </div>
 
 
-<span class="badge {css}">
-{esc(status)}
+<span class="badge %s">
+%s
 </span>
 
 </div>
@@ -1935,7 +1936,7 @@ TARGET
 </div>
 
 <h3>
-{esc(req["target"])}
+%s
 </h3>
 
 <div class="muted">
@@ -1943,7 +1944,7 @@ Resolved IP
 </div>
 
 <div>
-{esc(req["target_ip"] or "Not resolved")}
+%s
 </div>
 
 </div>
@@ -1956,11 +1957,11 @@ STATUS
 </div>
 
 <div class="stat">
-{esc(status)}
+%s
 </div>
 
 <p class="muted">
-{esc(description)}
+%s
 </p>
 
 </div>
@@ -1973,7 +1974,7 @@ CREATED
 </div>
 
 <h3>
-{esc(req["created"])}
+%s
 </h3>
 
 <div class="muted">
@@ -1981,7 +1982,7 @@ Request ID
 </div>
 
 <strong>
-#{req["id"]}
+#%s
 </strong>
 
 </div>
@@ -1999,10 +2000,7 @@ Authorized Scope
 </h2>
 
 <p class="muted">
-{
-    esc(req["scope"])
-    .replace(chr(10), "<br>")
-}
+%s
 </p>
 
 </div>
@@ -2021,14 +2019,14 @@ Secure Chat
 
 <div class="message-list">
 
-{message_html}
+%s
 
 </div>
 
 
 <form
     method="post"
-    action="/status/{request_id}/message"
+    action="/status/%s/message"
 >
 
 <textarea
@@ -2060,17 +2058,32 @@ Secure Chat
 Security Findings
 </h2>
 
-{findings_html}
+%s
 
 </div>
 
 </div>
-"""
+""" % (
+        req["id"],
+        css,
+        esc(status),
+        esc(req["target"]),
+        esc(req["target_ip"] or "Not resolved"),
+        esc(status),
+        esc(description),
+        esc(req["created"]),
+        req["id"],
+        nl2br(req["scope"]),
+        message_html,
+        request_id,
+        findings_html,
+    )
+
 
     return page(
-        f"Request #{request_id}",
+        "Request #%s" % request_id,
         body,
-        scripts
+        scripts,
     )
 
 
@@ -2080,7 +2093,7 @@ Security Findings
 
 @app.route(
     "/status/<int:request_id>/message",
-    methods=["POST"]
+    methods=["POST"],
 )
 def client_message(request_id):
 
@@ -2092,13 +2105,13 @@ def client_message(request_id):
 
         return (
             "Request not found",
-            404
+            404,
         )
 
 
     message = request.form.get(
         "message",
-        ""
+        "",
     ).strip()
 
 
@@ -2137,7 +2150,7 @@ def client_message(request_id):
     return redirect(
         url_for(
             "client_status",
-            request_id=request_id
+            request_id=request_id,
         )
     )
 
@@ -2159,7 +2172,7 @@ def client_status_api(request_id):
 
         return jsonify({
             "ok": False,
-            "error": "not_found"
+            "error": "not_found",
         }), 404
 
 
@@ -2352,13 +2365,13 @@ RETURN HOME
 
         return page(
             "OAuth Configuration",
-            body
+            body,
         ), 500
 
 
     redirect_uri = url_for(
         "google_callback",
-        _external=True
+        _external=True,
     )
 
 
@@ -2390,15 +2403,17 @@ def google_callback():
         ).strip().lower()
 
 
-        email_verified = user.get(
-            "email_verified",
-            False
+        email_verified = bool(
+            user.get(
+                "email_verified",
+                False,
+            )
         )
 
 
+        # BOTH ACCOUNTS ARE ACCEPTED
         if (
-            email !=
-            ALLOWED_ADMIN_EMAIL
+            email not in ALLOWED_ADMIN_EMAILS
             or
             not email_verified
         ):
@@ -2442,7 +2457,7 @@ RETURN HOME
 
             return page(
                 "Access Denied",
-                body
+                body,
             ), 403
 
 
@@ -2507,7 +2522,7 @@ RETURN HOME
 
         return page(
             "Authentication Error",
-            body
+            body,
         ), 500
 
 
@@ -2638,65 +2653,56 @@ def admin_dashboard():
         )
 
 
-        rows_html += f"""
+        rows_html += """
 <tr>
 
 <td>
-#{req["id"]}
+#%s
 </td>
-
 
 <td>
 
 <strong>
-{esc(req["name"])}
+%s
 </strong>
 
 <br>
 
 <span class="muted">
-{esc(req["email"])}
+%s
 </span>
 
 </td>
 
-
 <td>
 
-{esc(req["target"])}
+%s
 
 <br>
 
 <span class="muted">
-{esc(
-    req["target_ip"]
-    or
-    "unresolved"
-)}
+%s
 </span>
 
 </td>
 
-
 <td>
 
-<span class="badge {css}">
-{esc(req["status"])}
+<span class="badge %s">
+%s
 </span>
 
 </td>
 
-
 <td>
-{esc(req["created"])}
+%s
 </td>
-
 
 <td>
 
 <a
     class="btn"
-    href="/admin/request/{req["id"]}"
+    href="/admin/request/%s"
 >
     OPEN
 </a>
@@ -2704,7 +2710,21 @@ def admin_dashboard():
 </td>
 
 </tr>
-"""
+""" % (
+            req["id"],
+            esc(req["name"]),
+            esc(req["email"]),
+            esc(req["target"]),
+            esc(
+                req["target_ip"]
+                or
+                "unresolved"
+            ),
+            css,
+            esc(req["status"]),
+            esc(req["created"]),
+            req["id"],
+        )
 
 
     if not rows_html:
@@ -2723,7 +2743,7 @@ No requests yet.
 """
 
 
-    scripts = """
+    scripts = r"""
 <script>
 
 let adminLastMessageId = 0;
@@ -2819,7 +2839,7 @@ adminNotificationPoll();
     )
 
 
-    body = f"""
+    body = """
 <div
     class="actions"
     style="justify-content:space-between"
@@ -2836,7 +2856,7 @@ Security Requests
 </h1>
 
 <p class="muted">
-Welcome, {esc(admin_name)}.
+Welcome, %s.
 </p>
 
 </div>
@@ -2865,7 +2885,7 @@ PENDING
 </div>
 
 <div class="stat">
-{stats["PENDING"]}
+%s
 </div>
 
 </div>
@@ -2878,7 +2898,7 @@ ACCEPTED
 </div>
 
 <div class="stat">
-{stats["ACCEPTED"]}
+%s
 </div>
 
 </div>
@@ -2891,7 +2911,7 @@ COMPLETED
 </div>
 
 <div class="stat">
-{stats["COMPLETED"]}
+%s
 </div>
 
 </div>
@@ -2904,7 +2924,7 @@ DECLINED
 </div>
 
 <div class="stat">
-{stats["DECLINED"]}
+%s
 </div>
 
 </div>
@@ -2939,7 +2959,7 @@ DECLINED
 
 <tbody>
 
-{rows_html}
+%s
 
 </tbody>
 
@@ -2948,13 +2968,20 @@ DECLINED
 </div>
 
 </div>
-"""
+""" % (
+        esc(admin_name),
+        stats["PENDING"],
+        stats["ACCEPTED"],
+        stats["COMPLETED"],
+        stats["DECLINED"],
+        rows_html,
+    )
 
 
     return page(
         "Admin",
         body,
-        scripts
+        scripts,
     )
 
 
@@ -2964,7 +2991,7 @@ DECLINED
 
 @app.route(
     "/admin/request/<int:request_id>",
-    methods=["GET", "POST"]
+    methods=["GET", "POST"],
 )
 @admin_required
 def admin_request(request_id):
@@ -2978,7 +3005,7 @@ def admin_request(request_id):
 
         return (
             "Request not found",
-            404
+            404,
         )
 
 
@@ -3080,30 +3107,32 @@ def admin_request(request_id):
         )
 
 
-        message_html += f"""
-<div class="message {cls}">
+        message_html += """
+<div class="message %s">
 
 <div class="message-meta">
 
 <span>
-{esc(msg["sender"].upper())}
+%s
 </span>
 
 <span>
-{esc(msg["created"])}
+%s
 </span>
 
 </div>
 
 <div>
-{
-    esc(msg["message"])
-    .replace(chr(10), "<br>")
-}
+%s
 </div>
 
 </div>
-"""
+""" % (
+            cls,
+            esc(msg["sender"].upper()),
+            esc(msg["created"]),
+            nl2br(msg["message"]),
+        )
 
 
     if not message_html:
@@ -3120,42 +3149,42 @@ No messages.
 
     for finding in findings:
 
-        findings_html += f"""
+        severity = esc(
+            finding["severity"].upper()
+        )
+
+
+        findings_html += """
 <div class="finding">
 
 <div class="message-meta">
 
 <strong>
-{esc(finding["code"])}
+%s
 </strong>
 
 <span
-    class="severity
-    {esc(finding["severity"].upper())}"
+    class="severity %s"
 >
-{esc(finding["severity"].upper())}
+%s
 </span>
 
 </div>
 
 
 <h3>
-{esc(finding["title"])}
+%s
 </h3>
 
 
 <p>
-
 <strong>
 Evidence
 </strong>
 
 <br>
 
-{
-    esc(finding["evidence"])
-    .replace(chr(10), "<br>")
-}
+%s
 
 </p>
 
@@ -3168,10 +3197,7 @@ Impact
 
 <br>
 
-{
-    esc(finding["impact"])
-    .replace(chr(10), "<br>")
-}
+%s
 
 </p>
 
@@ -3184,15 +3210,20 @@ Recommendation
 
 <br>
 
-{
-    esc(finding["recommendation"])
-    .replace(chr(10), "<br>")
-}
+%s
 
 </p>
 
 </div>
-"""
+""" % (
+            esc(finding["code"]),
+            severity,
+            severity,
+            esc(finding["title"]),
+            nl2br(finding["evidence"]),
+            nl2br(finding["impact"]),
+            nl2br(finding["recommendation"]),
+        )
 
 
     if not findings_html:
@@ -3204,7 +3235,7 @@ No findings added yet.
 """
 
 
-    body = f"""
+    body = """
 <div
     class="actions"
     style="justify-content:space-between"
@@ -3213,18 +3244,18 @@ No findings added yet.
 <div>
 
 <div class="muted">
-REQUEST #{req["id"]}
+REQUEST #%s
 </div>
 
 <h1>
-{esc(req["name"])}
+%s
 </h1>
 
 </div>
 
 
-<span class="badge {css}">
-{esc(status)}
+<span class="badge %s">
+%s
 </span>
 
 </div>
@@ -3241,12 +3272,12 @@ Client
 <p>
 
 <strong>
-{esc(req["name"])}
+%s
 </strong>
 
 <br>
 
-{esc(req["email"])}
+%s
 
 </p>
 
@@ -3262,17 +3293,13 @@ Target
 <p>
 
 <strong>
-{esc(req["target"])}
+%s
 </strong>
 
 <br>
 
 IP:
-{esc(
-    req["target_ip"]
-    or
-    "unresolved"
-)}
+%s
 
 </p>
 
@@ -3286,7 +3313,7 @@ Created
 </h3>
 
 <p>
-{esc(req["created"])}
+%s
 </p>
 
 </div>
@@ -3304,7 +3331,7 @@ Assessment Status
 </h2>
 
 <p class="muted">
-{esc(description)}
+%s
 </p>
 
 
@@ -3362,14 +3389,14 @@ Client Chat
 
 <div class="message-list">
 
-{message_html}
+%s
 
 </div>
 
 
 <form
     method="post"
-    action="/admin/request/{request_id}/message"
+    action="/admin/request/%s/message"
 >
 
 <textarea
@@ -3400,7 +3427,7 @@ Add Finding
 
 <form
     method="post"
-    action="/admin/request/{request_id}/finding"
+    action="/admin/request/%s/finding"
 >
 
 
@@ -3502,7 +3529,7 @@ Findings
 
 <a
     class="btn"
-    href="/admin/request/{request_id}/report"
+    href="/admin/request/%s/report"
 >
 GENERATE REPORT
 </a>
@@ -3510,7 +3537,7 @@ GENERATE REPORT
 </div>
 
 
-{findings_html}
+%s
 
 </div>
 
@@ -3524,12 +3551,32 @@ GENERATE REPORT
 >
 ← BACK TO ADMIN
 </a>
-"""
+""" % (
+        req["id"],
+        esc(req["name"]),
+        css,
+        esc(status),
+        esc(req["name"]),
+        esc(req["email"]),
+        esc(req["target"]),
+        esc(
+            req["target_ip"]
+            or
+            "unresolved"
+        ),
+        esc(req["created"]),
+        esc(description),
+        message_html,
+        request_id,
+        request_id,
+        request_id,
+        findings_html,
+    )
 
 
     return page(
-        f"Request #{request_id}",
-        body
+        "Request #%s" % request_id,
+        body,
     )
 
 
@@ -3539,7 +3586,7 @@ GENERATE REPORT
 
 @app.route(
     "/admin/request/<int:request_id>/message",
-    methods=["POST"]
+    methods=["POST"],
 )
 @admin_required
 def admin_message(request_id):
@@ -3553,13 +3600,13 @@ def admin_message(request_id):
 
         return (
             "Request not found",
-            404
+            404,
         )
 
 
     message = request.form.get(
         "message",
-        ""
+        "",
     ).strip()
 
 
@@ -3598,7 +3645,7 @@ def admin_message(request_id):
     return redirect(
         url_for(
             "admin_request",
-            request_id=request_id
+            request_id=request_id,
         )
     )
 
@@ -3663,7 +3710,7 @@ def admin_messages_api(request_id):
 
 @app.route(
     "/admin/request/<int:request_id>/finding",
-    methods=["POST"]
+    methods=["POST"],
 )
 @admin_required
 def add_finding(request_id):
@@ -3677,43 +3724,43 @@ def add_finding(request_id):
 
         return (
             "Request not found",
-            404
+            404,
         )
 
 
     code = request.form.get(
         "code",
-        ""
+        "",
     ).strip()
 
 
     title = request.form.get(
         "title",
-        ""
+        "",
     ).strip()
 
 
     severity = request.form.get(
         "severity",
-        "INFO"
+        "INFO",
     ).strip().upper()
 
 
     evidence = request.form.get(
         "evidence",
-        ""
+        "",
     ).strip()
 
 
     impact = request.form.get(
         "impact",
-        ""
+        "",
     ).strip()
 
 
     recommendation = request.form.get(
         "recommendation",
-        ""
+        "",
     ).strip()
 
 
@@ -3774,7 +3821,7 @@ def add_finding(request_id):
     return redirect(
         url_for(
             "admin_request",
-            request_id=request_id
+            request_id=request_id,
         )
     )
 
@@ -3798,7 +3845,7 @@ def report(request_id):
 
         return (
             "Request not found",
-            404
+            404,
         )
 
 
@@ -3824,7 +3871,7 @@ def report(request_id):
 
     for finding in findings:
 
-        findings_html += f"""
+        findings_html += """
 <section style="
     border:1px solid #d7dde5;
     border-radius:12px;
@@ -3834,11 +3881,11 @@ def report(request_id):
 
 <h3>
 
-{esc(finding["code"])}
+%s
 
 —
 
-{esc(finding["title"])}
+%s
 
 </h3>
 
@@ -3849,7 +3896,7 @@ def report(request_id):
 Severity:
 </strong>
 
-{esc(finding["severity"])}
+%s
 
 </p>
 
@@ -3862,10 +3909,7 @@ Evidence
 
 <br>
 
-{
-    esc(finding["evidence"])
-    .replace(chr(10), "<br>")
-}
+%s
 
 </p>
 
@@ -3878,10 +3922,7 @@ Impact
 
 <br>
 
-{
-    esc(finding["impact"])
-    .replace(chr(10), "<br>")
-}
+%s
 
 </p>
 
@@ -3894,15 +3935,19 @@ Recommendation
 
 <br>
 
-{
-    esc(finding["recommendation"])
-    .replace(chr(10), "<br>")
-}
+%s
 
 </p>
 
 </section>
-"""
+""" % (
+            esc(finding["code"]),
+            esc(finding["title"]),
+            esc(finding["severity"]),
+            nl2br(finding["evidence"]),
+            nl2br(finding["impact"]),
+            nl2br(finding["recommendation"]),
+        )
 
 
     if not findings_html:
@@ -3914,7 +3959,7 @@ No findings have been documented.
 """
 
 
-    report_html = f"""
+    report_html = """
 <!doctype html>
 
 <html>
@@ -3924,13 +3969,13 @@ No findings have been documented.
 <meta charset="utf-8">
 
 <title>
-Security Assessment Report #{req["id"]}
+Security Assessment Report #%s
 </title>
 
 
 <style>
 
-body {{
+body {
 
     font-family:
         Arial,
@@ -3951,35 +3996,35 @@ body {{
 
     line-height:
         1.6;
-}}
+}
 
 
-h1 {{
+h1 {
     margin-bottom:5px;
-}}
+}
 
 
-.meta {{
+.meta {
 
     color:
         #5d6d7e;
 
     margin-bottom:
         35px;
-}}
+}
 
 
-@media print {{
+@media print {
 
-    body {{
+    body {
         margin:20px;
-    }}
+    }
 
-    .print {{
+    .print {
         display:none;
-    }}
+    }
 
-}}
+}
 
 </style>
 
@@ -4013,7 +4058,7 @@ Authorized Security Assessment Report
 Request:
 </strong>
 
-#{req["id"]}
+#%s
 
 <br>
 
@@ -4022,7 +4067,7 @@ Request:
 Client:
 </strong>
 
-{esc(req["name"])}
+%s
 
 <br>
 
@@ -4031,7 +4076,7 @@ Client:
 Email:
 </strong>
 
-{esc(req["email"])}
+%s
 
 <br>
 
@@ -4040,7 +4085,7 @@ Email:
 Target:
 </strong>
 
-{esc(req["target"])}
+%s
 
 <br>
 
@@ -4049,11 +4094,7 @@ Target:
 Resolved IP:
 </strong>
 
-{esc(
-    req["target_ip"]
-    or
-    "Not resolved"
-)}
+%s
 
 <br>
 
@@ -4062,7 +4103,7 @@ Resolved IP:
 Status:
 </strong>
 
-{esc(req["status"])}
+%s
 
 <br>
 
@@ -4071,7 +4112,7 @@ Status:
 Created:
 </strong>
 
-{esc(req["created"])}
+%s
 
 </div>
 
@@ -4083,10 +4124,7 @@ Authorized Scope
 
 <p>
 
-{
-    esc(req["scope"])
-    .replace(chr(10), "<br>")
-}
+%s
 
 </p>
 
@@ -4096,7 +4134,7 @@ Findings
 </h2>
 
 
-{findings_html}
+%s
 
 
 <hr>
@@ -4110,7 +4148,22 @@ Generated by MATIA // SECURITY CHECK
 </body>
 
 </html>
-"""
+""" % (
+        req["id"],
+        req["id"],
+        esc(req["name"]),
+        esc(req["email"]),
+        esc(req["target"]),
+        esc(
+            req["target_ip"]
+            or
+            "Not resolved"
+        ),
+        esc(req["status"]),
+        esc(req["created"]),
+        nl2br(req["scope"]),
+        findings_html,
+    )
 
 
     return report_html
@@ -4141,7 +4194,7 @@ def favicon():
 
     return (
         "",
-        204
+        204,
     )
 
 
@@ -4179,7 +4232,7 @@ RETURN HOME
 
     return page(
         "404",
-        body
+        body,
     ), 404
 
 
@@ -4213,7 +4266,7 @@ RETURN HOME
 
     return page(
         "500",
-        body
+        body,
     ), 500
 
 
@@ -4226,7 +4279,7 @@ if __name__ == "__main__":
     port = int(
         os.environ.get(
             "PORT",
-            "5000"
+            "5000",
         )
     )
 
@@ -4250,12 +4303,13 @@ if __name__ == "__main__":
     )
 
     print(
-        f" Port   : {port}"
+        " Port   :",
+        port,
     )
 
     print(
         " DB     :",
-        DB_FILE
+        DB_FILE,
     )
 
     print(
@@ -4264,6 +4318,10 @@ if __name__ == "__main__":
 
     print(
         " Access : Restricted"
+    )
+
+    print(
+        " Admins : kleimatia1@gmail.com + vantyx199@gmail.com"
     )
 
     print("=" * 62)
