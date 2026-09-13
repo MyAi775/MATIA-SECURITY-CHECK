@@ -1,4 +1,4 @@
-
+```python
 import os
 import secrets
 import socket
@@ -53,6 +53,7 @@ GOOGLE_CLIENT_SECRET = os.environ.get(
     "",
 )
 
+
 # =========================================================
 # TWO ALLOWED GOOGLE ADMIN ACCOUNTS
 # =========================================================
@@ -63,9 +64,16 @@ ALLOWED_ADMIN_EMAILS = {
 }
 
 
+# =========================================================
+# FLASK SESSION CONFIG
+# =========================================================
+
 app.config["SECRET_KEY"] = SECRET_KEY
+
 app.config["SESSION_COOKIE_HTTPONLY"] = True
+
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
 app.config["SESSION_COOKIE_SECURE"] = (
     os.environ.get(
         "SESSION_COOKIE_SECURE",
@@ -84,10 +92,12 @@ google = oauth.register(
     name="google",
     client_id=GOOGLE_CLIENT_ID,
     client_secret=GOOGLE_CLIENT_SECRET,
+
     server_metadata_url=(
         "https://accounts.google.com/"
         ".well-known/openid-configuration"
     ),
+
     client_kwargs={
         "scope": "openid email profile",
     },
@@ -99,12 +109,18 @@ google = oauth.register(
 # =========================================================
 
 def db():
-    conn = sqlite3.connect(DB_FILE)
+
+    conn = sqlite3.connect(
+        DB_FILE
+    )
+
     conn.row_factory = sqlite3.Row
+
     return conn
 
 
 def init_db():
+
     conn = db()
 
     conn.execute("""
@@ -154,20 +170,27 @@ def init_db():
     }
 
     if "read_by_client" not in columns:
-        conn.execute("""
+
+        conn.execute(
+            """
             ALTER TABLE messages
             ADD COLUMN read_by_client
             INTEGER NOT NULL DEFAULT 0
-        """)
+            """
+        )
 
     if "read_by_admin" not in columns:
-        conn.execute("""
+
+        conn.execute(
+            """
             ALTER TABLE messages
             ADD COLUMN read_by_admin
             INTEGER NOT NULL DEFAULT 0
-        """)
+            """
+        )
 
     conn.commit()
+
     conn.close()
 
 
@@ -179,16 +202,21 @@ init_db()
 # =========================================================
 
 def now():
+
     return datetime.utcnow().strftime(
         "%Y-%m-%d %H:%M:%S UTC"
     )
 
 
 def esc(value):
-    return escape(str(value or ""))
+
+    return escape(
+        str(value or "")
+    )
 
 
 def nl2br(value):
+
     return esc(value).replace(
         "\n",
         "<br>",
@@ -196,6 +224,7 @@ def nl2br(value):
 
 
 def get_request(request_id):
+
     conn = db()
 
     row = conn.execute(
@@ -213,30 +242,36 @@ def get_request(request_id):
 
 
 def current_admin_email():
+
     return (
         session.get(
             "admin_email",
             "",
         )
-        .strip()
-        .lower()
-    )
+        or ""
+    ).strip().lower()
 
 
 def is_admin():
+
     email = current_admin_email()
 
     return (
-        session.get("admin_logged_in") is True
-        and email in ALLOWED_ADMIN_EMAILS
+        session.get(
+            "admin_logged_in"
+        ) is True
+        and
+        email in ALLOWED_ADMIN_EMAILS
     )
 
 
 def admin_required(fn):
+
     @wraps(fn)
     def wrapper(*args, **kwargs):
 
         if not is_admin():
+
             session.clear()
 
             return redirect(
@@ -254,7 +289,9 @@ def admin_required(fn):
 
 
 def resolve_hostname(target):
+
     try:
+
         parsed = urlparse(
             target
             if "://" in target
@@ -271,30 +308,39 @@ def resolve_hostname(target):
         )
 
     except Exception:
+
         return None
 
 
 def resolve_target_ip(target):
-    return resolve_hostname(target)
+
+    return resolve_hostname(
+        target
+    )
 
 
 def status_info(status):
+
     values = {
+
         "PENDING": (
             "PENDING",
             "Request received and waiting for review.",
             "pending",
         ),
+
         "ACCEPTED": (
             "ACCEPTED",
             "Assessment request accepted.",
             "accepted",
         ),
+
         "DECLINED": (
             "DECLINED",
             "Assessment request was declined.",
             "declined",
         ),
+
         "COMPLETED": (
             "COMPLETED",
             "Assessment completed.",
@@ -313,11 +359,12 @@ def status_info(status):
 
 
 # =========================================================
-# NOTIFICATIONS
+# NOTIFICATION SCRIPT
 # =========================================================
 
 NOTIFICATION_SCRIPT = r"""
 <script>
+
 (function () {
 
     let matiaAudio = null;
@@ -340,15 +387,22 @@ NOTIFICATION_SCRIPT = r"""
                     window.webkitAudioContext;
 
                 if (AudioContext) {
-                    matiaAudio = new AudioContext();
+
+                    matiaAudio =
+                        new AudioContext();
+
                 }
+
             }
+
 
             if (
                 matiaAudio &&
                 matiaAudio.state === "suspended"
             ) {
+
                 matiaAudio.resume();
+
             }
 
         } catch (e) {
@@ -357,22 +411,33 @@ NOTIFICATION_SCRIPT = r"""
                 "Audio initialization failed:",
                 e
             );
+
         }
+
     }
 
 
     window.matiaRing = function () {
 
-        if (!matiaSoundEnabled) return;
+        if (!matiaSoundEnabled)
+            return;
+
 
         try {
 
             initMatiaAudio();
 
-            if (!matiaAudio) return;
 
-            const ctx = matiaAudio;
-            const start = ctx.currentTime;
+            if (!matiaAudio)
+                return;
+
+
+            const ctx =
+                matiaAudio;
+
+
+            const start =
+                ctx.currentTime;
 
 
             function tone(
@@ -384,37 +449,50 @@ NOTIFICATION_SCRIPT = r"""
                 const osc =
                     ctx.createOscillator();
 
+
                 const gain =
                     ctx.createGain();
 
-                osc.type = "sine";
+
+                osc.type =
+                    "sine";
+
 
                 osc.frequency.setValueAtTime(
                     freq,
                     start + offset
                 );
 
+
                 gain.gain.setValueAtTime(
                     0.0001,
                     start + offset
                 );
+
 
                 gain.gain.exponentialRampToValueAtTime(
                     0.18,
                     start + offset + 0.02
                 );
 
+
                 gain.gain.exponentialRampToValueAtTime(
                     0.0001,
                     start + offset + duration
                 );
 
+
                 osc.connect(gain);
-                gain.connect(ctx.destination);
+
+                gain.connect(
+                    ctx.destination
+                );
+
 
                 osc.start(
                     start + offset
                 );
+
 
                 osc.stop(
                     start +
@@ -422,11 +500,23 @@ NOTIFICATION_SCRIPT = r"""
                     duration +
                     0.03
                 );
+
             }
 
 
-            tone(880, 0, 0.18);
-            tone(660, 0.23, 0.22);
+            tone(
+                880,
+                0,
+                0.18
+            );
+
+
+            tone(
+                660,
+                0.23,
+                0.22
+            );
+
 
         } catch (e) {
 
@@ -434,51 +524,68 @@ NOTIFICATION_SCRIPT = r"""
                 "Ring failed:",
                 e
             );
+
         }
+
     };
 
 
     window.enableMatiaNotifications =
         async function () {
 
-        try {
+            try {
 
-            initMatiaAudio();
+                initMatiaAudio();
 
-            if (!("Notification" in window)) {
 
-                alert(
-                    "Browser notifications are not supported."
-                );
+                if (!("Notification" in window)) {
 
-                return;
+                    alert(
+                        "Browser notifications are not supported."
+                    );
+
+                    return;
+
+                }
+
+
+                const permission =
+                    await Notification.requestPermission();
+
+
+                if (
+                    permission ===
+                    "granted"
+                ) {
+
+                    matiaNotificationsEnabled =
+                        true;
+
+
+                    localStorage.setItem(
+                        "matia_notifications",
+                        "on"
+                    );
+
+
+                    matiaDesktopNotification(
+                        "MATIA // SECURITY CHECK",
+                        "Notifications enabled."
+                    );
+
+                }
+
+
+                updateNotificationButtons();
+
+
+            } catch (e) {
+
+                console.log(e);
+
             }
 
-            const permission =
-                await Notification.requestPermission();
-
-            if (permission === "granted") {
-
-                matiaNotificationsEnabled = true;
-
-                localStorage.setItem(
-                    "matia_notifications",
-                    "on"
-                );
-
-                matiaDesktopNotification(
-                    "MATIA // SECURITY CHECK",
-                    "Notifications enabled."
-                );
-            }
-
-            updateNotificationButtons();
-
-        } catch (e) {
-
-            console.log(e);
-        }
-    };
+        };
 
 
     window.matiaDesktopNotification =
@@ -487,58 +594,75 @@ NOTIFICATION_SCRIPT = r"""
             body
         ) {
 
-        if (!matiaNotificationsEnabled)
-            return;
+            if (
+                !matiaNotificationsEnabled
+            )
+                return;
 
-        if (!("Notification" in window))
-            return;
 
-        if (
-            Notification.permission !==
-            "granted"
-        )
-            return;
+            if (
+                !("Notification" in window)
+            )
+                return;
 
-        try {
 
-            new Notification(
-                title,
-                {
-                    body: body,
-                    icon: "/favicon.ico"
-                }
-            );
+            if (
+                Notification.permission !==
+                "granted"
+            )
+                return;
 
-        } catch (e) {
 
-            console.log(
-                "Notification failed:",
-                e
-            );
-        }
-    };
+            try {
+
+                new Notification(
+                    title,
+                    {
+                        body: body,
+                        icon: "/favicon.ico"
+                    }
+                );
+
+
+            } catch (e) {
+
+                console.log(
+                    "Notification failed:",
+                    e
+                );
+
+            }
+
+        };
 
 
     window.toggleMatiaSound =
         function () {
 
-        matiaSoundEnabled =
-            !matiaSoundEnabled;
+            matiaSoundEnabled =
+                !matiaSoundEnabled;
 
-        localStorage.setItem(
-            "matia_sound",
-            matiaSoundEnabled
-                ? "on"
-                : "off"
-        );
 
-        if (matiaSoundEnabled) {
-            initMatiaAudio();
-            matiaRing();
-        }
+            localStorage.setItem(
+                "matia_sound",
+                matiaSoundEnabled
+                    ? "on"
+                    : "off"
+            );
 
-        updateSoundButton();
-    };
+
+            if (matiaSoundEnabled) {
+
+                initMatiaAudio();
+
+                matiaRing();
+
+            }
+
+
+            updateSoundButton();
+
+        };
 
 
     function updateSoundButton() {
@@ -548,15 +672,18 @@ NOTIFICATION_SCRIPT = r"""
                 "[data-matia-sound]"
             );
 
+
         buttons.forEach(
             function (button) {
 
-            button.textContent =
-                matiaSoundEnabled
-                    ? "🔊 RING ON"
-                    : "🔇 RING OFF";
+                button.textContent =
+                    matiaSoundEnabled
+                        ? "🔊 RING ON"
+                        : "🔇 RING OFF";
 
-        });
+            }
+        );
+
     }
 
 
@@ -567,33 +694,39 @@ NOTIFICATION_SCRIPT = r"""
                 "[data-matia-notifications]"
             );
 
+
         buttons.forEach(
             function (button) {
 
-            if (
-                matiaNotificationsEnabled &&
-                "Notification" in window &&
-                Notification.permission ===
-                "granted"
-            ) {
+                if (
+                    matiaNotificationsEnabled &&
+                    "Notification" in window &&
+                    Notification.permission ===
+                    "granted"
+                ) {
 
-                button.textContent =
-                    "🔔 NOTIFICATIONS ON";
+                    button.textContent =
+                        "🔔 NOTIFICATIONS ON";
 
-            } else {
+                } else {
 
-                button.textContent =
-                    "🔔 ENABLE NOTIFICATIONS";
+                    button.textContent =
+                        "🔔 ENABLE NOTIFICATIONS";
+
+                }
+
             }
+        );
 
-        });
     }
 
 
     document.addEventListener(
         "click",
         function () {
+
             initMatiaAudio();
+
         },
         {
             once: true
@@ -606,12 +739,14 @@ NOTIFICATION_SCRIPT = r"""
         function () {
 
             updateSoundButton();
+
             updateNotificationButtons();
 
         }
     );
 
 })();
+
 </script>
 """
 
@@ -624,6 +759,7 @@ STYLE = r"""
 <style>
 
 :root {
+
     --bg: #05070b;
     --panel: #0b1018;
     --panel2: #0f1622;
@@ -635,27 +771,45 @@ STYLE = r"""
     --green: #32e875;
     --yellow: #ffd166;
     --red: #ff5577;
+
 }
+
 
 * {
-    box-sizing: border-box;
+
+    box-sizing:
+        border-box;
+
 }
 
+
 body {
-    margin: 0;
+
+    margin:
+        0;
+
+
     background:
+
         radial-gradient(
             circle at top right,
             rgba(56,168,255,.10),
             transparent 32%
         ),
+
         radial-gradient(
             circle at bottom left,
             rgba(66,232,255,.05),
             transparent 30%
         ),
+
         var(--bg);
-    color: var(--text);
+
+
+    color:
+        var(--text);
+
+
     font-family:
         Inter,
         ui-sans-serif,
@@ -664,85 +818,192 @@ body {
         BlinkMacSystemFont,
         "Segoe UI",
         sans-serif;
+
 }
+
 
 a {
-    color: inherit;
-    text-decoration: none;
+
+    color:
+        inherit;
+
+    text-decoration:
+        none;
+
 }
+
 
 .nav {
-    position: sticky;
-    top: 0;
-    z-index: 20;
 
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
+    position:
+        sticky;
 
-    padding: 15px 22px;
+    top:
+        0;
 
-    background: rgba(5,7,11,.88);
+    z-index:
+        20;
 
-    backdrop-filter: blur(16px);
 
-    border-bottom: 1px solid var(--border);
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        space-between;
+
+
+    gap:
+        14px;
+
+
+    padding:
+        15px 22px;
+
+
+    background:
+        rgba(5,7,11,.88);
+
+
+    backdrop-filter:
+        blur(16px);
+
+
+    border-bottom:
+        1px solid var(--border);
+
 }
+
 
 .logo {
-    font-weight: 900;
-    letter-spacing: .08em;
+
+    font-weight:
+        900;
+
+
+    letter-spacing:
+        .08em;
+
 }
+
 
 .logo span {
-    color: var(--cyan);
+
+    color:
+        var(--cyan);
+
 }
+
 
 .nav-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+
+    gap:
+        8px;
+
+
+    flex-wrap:
+        wrap;
+
 }
+
 
 .online {
-    color: var(--green);
-    font-size: 12px;
-    font-weight: 800;
+
+    color:
+        var(--green);
+
+
+    font-size:
+        12px;
+
+
+    font-weight:
+        800;
+
 }
 
+
 .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
 
-    border: 1px solid var(--border);
-    border-radius: 10px;
+    display:
+        inline-flex;
 
-    background: var(--panel2);
-    color: var(--text);
 
-    padding: 10px 14px;
+    align-items:
+        center;
 
-    cursor: pointer;
 
-    font-weight: 750;
+    justify-content:
+        center;
+
+
+    gap:
+        7px;
+
+
+    border:
+        1px solid var(--border);
+
+
+    border-radius:
+        10px;
+
+
+    background:
+        var(--panel2);
+
+
+    color:
+        var(--text);
+
+
+    padding:
+        10px 14px;
+
+
+    cursor:
+        pointer;
+
+
+    font-weight:
+        750;
+
 
     transition:
         transform .15s ease,
         border-color .15s ease,
         background .15s ease;
+
 }
+
 
 .btn:hover {
-    transform: translateY(-1px);
-    border-color: var(--blue);
-    background: #111c2b;
+
+    transform:
+        translateY(-1px);
+
+
+    border-color:
+        var(--blue);
+
+
+    background:
+        #111c2b;
+
 }
 
+
 .btn.primary {
+
     background:
         linear-gradient(
             135deg,
@@ -750,32 +1011,54 @@ a {
             #16a8c9
         );
 
-    border-color: #29b9ff;
+
+    border-color:
+        #29b9ff;
+
 }
 
+
 .btn.danger {
+
     border-color:
         rgba(255,85,119,.4);
 
-    color: #ff8da4;
+
+    color:
+        #ff8da4;
+
 }
+
 
 .container {
-    width: min(
-        1120px,
-        calc(100% - 30px)
-    );
 
-    margin: 0 auto;
+    width:
+        min(
+            1120px,
+            calc(100% - 30px)
+        );
 
-    padding: 35px 0 70px;
+
+    margin:
+        0 auto;
+
+
+    padding:
+        35px 0 70px;
+
 }
+
 
 .hero {
-    padding: 45px 0;
+
+    padding:
+        45px 0;
+
 }
 
+
 .hero h1 {
+
     font-size:
         clamp(
             38px,
@@ -783,27 +1066,54 @@ a {
             78px
         );
 
-    line-height: .95;
+
+    line-height:
+        .95;
+
 
     margin:
         0 0 20px;
 
-    letter-spacing: -.06em;
+
+    letter-spacing:
+        -.06em;
+
 }
+
 
 .hero h1 span {
-    color: var(--cyan);
+
+    color:
+        var(--cyan);
+
 }
+
 
 .hero p {
-    color: var(--muted);
-    max-width: 700px;
-    font-size: 17px;
-    line-height: 1.7;
+
+    color:
+        var(--muted);
+
+
+    max-width:
+        700px;
+
+
+    font-size:
+        17px;
+
+
+    line-height:
+        1.7;
+
 }
 
+
 .grid {
-    display: grid;
+
+    display:
+        grid;
+
 
     grid-template-columns:
         repeat(
@@ -811,10 +1121,15 @@ a {
             minmax(260px, 1fr)
         );
 
-    gap: 16px;
+
+    gap:
+        16px;
+
 }
 
+
 .card {
+
     background:
         linear-gradient(
             180deg,
@@ -823,57 +1138,99 @@ a {
         ),
         var(--panel);
 
+
     border:
         1px solid var(--border);
 
-    border-radius: 17px;
 
-    padding: 22px;
+    border-radius:
+        17px;
+
+
+    padding:
+        22px;
+
 
     box-shadow:
         0 15px 45px rgba(0,0,0,.22);
+
 }
+
 
 .card h2,
 .card h3 {
-    margin-top: 0;
+
+    margin-top:
+        0;
+
 }
+
 
 .muted {
-    color: var(--muted);
+
+    color:
+        var(--muted);
+
 }
 
+
 label {
-    display: block;
+
+    display:
+        block;
+
 
     margin:
         14px 0 7px;
 
-    color: #a9b9cb;
 
-    font-size: 13px;
+    color:
+        #a9b9cb;
 
-    font-weight: 700;
+
+    font-size:
+        13px;
+
+
+    font-weight:
+        700;
+
 }
+
 
 input,
 textarea,
 select {
-    width: 100%;
 
-    background: #070b11;
+    width:
+        100%;
 
-    color: var(--text);
+
+    background:
+        #070b11;
+
+
+    color:
+        var(--text);
+
 
     border:
         1px solid var(--border);
 
-    border-radius: 10px;
 
-    padding: 12px 13px;
+    border-radius:
+        10px;
 
-    outline: none;
+
+    padding:
+        12px 13px;
+
+
+    outline:
+        none;
+
 }
+
 
 input:focus,
 textarea:focus,
@@ -882,197 +1239,426 @@ select:focus {
     border-color:
         var(--blue);
 
+
     box-shadow:
         0 0 0 3px
         rgba(56,168,255,.08);
+
 }
+
 
 textarea {
-    min-height: 120px;
-    resize: vertical;
+
+    min-height:
+        120px;
+
+
+    resize:
+        vertical;
+
 }
+
 
 .actions {
-    display: flex;
-    gap: 9px;
-    flex-wrap: wrap;
-    margin-top: 16px;
+
+    display:
+        flex;
+
+
+    gap:
+        9px;
+
+
+    flex-wrap:
+        wrap;
+
+
+    margin-top:
+        16px;
+
 }
+
 
 .badge {
-    display: inline-flex;
-    padding: 6px 10px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 900;
-    letter-spacing: .04em;
+
+    display:
+        inline-flex;
+
+
+    padding:
+        6px 10px;
+
+
+    border-radius:
+        999px;
+
+
+    font-size:
+        11px;
+
+
+    font-weight:
+        900;
+
+
+    letter-spacing:
+        .04em;
+
 }
+
 
 .badge.pending {
+
     background:
         rgba(255,209,102,.10);
-    color: var(--yellow);
+
+
+    color:
+        var(--yellow);
+
 }
+
 
 .badge.accepted {
+
     background:
         rgba(50,232,117,.10);
-    color: var(--green);
+
+
+    color:
+        var(--green);
+
 }
+
 
 .badge.declined {
+
     background:
         rgba(255,85,119,.10);
-    color: var(--red);
+
+
+    color:
+        var(--red);
+
 }
+
 
 .badge.completed {
+
     background:
         rgba(66,232,255,.10);
-    color: var(--cyan);
+
+
+    color:
+        var(--cyan);
+
 }
+
 
 .message-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    max-height: 450px;
-    overflow-y: auto;
+
+    display:
+        flex;
+
+
+    flex-direction:
+        column;
+
+
+    gap:
+        10px;
+
+
+    max-height:
+        450px;
+
+
+    overflow-y:
+        auto;
+
 }
+
 
 .message {
+
     border:
         1px solid var(--border);
 
-    background: #080d14;
 
-    border-radius: 12px;
+    background:
+        #080d14;
 
-    padding: 12px;
+
+    border-radius:
+        12px;
+
+
+    padding:
+        12px;
+
 }
+
 
 .message.admin {
+
     border-color:
         rgba(66,232,255,.22);
+
 }
+
 
 .message.client {
+
     border-color:
         rgba(56,168,255,.22);
+
 }
+
 
 .message-meta {
-    display: flex;
 
-    justify-content: space-between;
+    display:
+        flex;
 
-    gap: 10px;
 
-    color: var(--muted);
+    justify-content:
+        space-between;
 
-    font-size: 11px;
 
-    margin-bottom: 7px;
+    gap:
+        10px;
+
+
+    color:
+        var(--muted);
+
+
+    font-size:
+        11px;
+
+
+    margin-bottom:
+        7px;
+
 }
 
+
 .finding {
+
     border:
         1px solid var(--border);
 
-    border-radius: 14px;
 
-    padding: 17px;
+    border-radius:
+        14px;
 
-    margin-bottom: 12px;
 
-    background: #080d14;
+    padding:
+        17px;
+
+
+    margin-bottom:
+        12px;
+
+
+    background:
+        #080d14;
+
 }
+
 
 .severity {
-    font-weight: 900;
-    font-size: 12px;
+
+    font-weight:
+        900;
+
+
+    font-size:
+        12px;
+
 }
+
 
 .severity.CRITICAL,
 .severity.HIGH {
-    color: var(--red);
+
+    color:
+        var(--red);
+
 }
 
+
 .severity.MEDIUM {
-    color: var(--yellow);
+
+    color:
+        var(--yellow);
+
 }
+
 
 .severity.LOW,
 .severity.INFO {
-    color: var(--cyan);
+
+    color:
+        var(--cyan);
+
 }
+
 
 .table-wrap {
-    overflow-x: auto;
+
+    overflow-x:
+        auto;
+
 }
 
+
 table {
-    width: 100%;
-    border-collapse: collapse;
+
+    width:
+        100%;
+
+
+    border-collapse:
+        collapse;
+
 }
+
 
 th,
 td {
-    padding: 13px;
+
+    padding:
+        13px;
+
+
     border-bottom:
         1px solid var(--border);
-    text-align: left;
-    white-space: nowrap;
+
+
+    text-align:
+        left;
+
+
+    white-space:
+        nowrap;
+
 }
+
 
 th {
-    color: var(--muted);
-    font-size: 12px;
+
+    color:
+        var(--muted);
+
+
+    font-size:
+        12px;
+
 }
 
+
 .alert {
+
     border:
         1px solid var(--border);
 
-    background: var(--panel2);
+
+    background:
+        var(--panel2);
+
 
     padding:
         13px 15px;
 
-    border-radius: 10px;
 
-    margin-bottom: 15px;
+    border-radius:
+        10px;
+
+
+    margin-bottom:
+        15px;
+
 }
 
+
 .alert.error {
+
     border-color:
         rgba(255,85,119,.35);
 
-    color: #ff9bb0;
+
+    color:
+        #ff9bb0;
+
 }
+
+
+.alert.success {
+
+    border-color:
+        rgba(50,232,117,.35);
+
+
+    color:
+        #79f2a4;
+
+}
+
 
 .stat {
-    font-size: 34px;
-    font-weight: 900;
+
+    font-size:
+        34px;
+
+
+    font-weight:
+        900;
+
 }
 
+
 .footer {
-    text-align: center;
-    color: #516276;
-    font-size: 12px;
-    padding: 30px 0;
+
+    text-align:
+        center;
+
+
+    color:
+        #516276;
+
+
+    font-size:
+        12px;
+
+
+    padding:
+        30px 0;
+
 }
+
 
 @media (max-width: 700px) {
 
     .nav {
-        align-items: flex-start;
-        flex-direction: column;
+
+        align-items:
+            flex-start;
+
+
+        flex-direction:
+            column;
+
     }
 
+
     .hero {
-        padding-top: 25px;
+
+        padding-top:
+            25px;
+
     }
+
 }
 
 </style>
@@ -1080,7 +1666,7 @@ th {
 
 
 # =========================================================
-# PAGE
+# PAGE WRAPPER
 # =========================================================
 
 def page(
@@ -1109,6 +1695,7 @@ def page(
 </a>
 """
 
+
     template = """
 <!doctype html>
 
@@ -1134,9 +1721,12 @@ MATIA // SECURITY CHECK
 
 </head>
 
+
 <body>
 
+
 <nav class="nav">
+
 
 <a
     href="/"
@@ -1145,9 +1735,12 @@ MATIA // SECURITY CHECK
     MATIA <span>//</span> SECURITY CHECK
 </a>
 
+
 <div class="nav-right">
 
+
 {{ admin_nav|safe }}
+
 
 <button
     class="btn"
@@ -1157,6 +1750,7 @@ MATIA // SECURITY CHECK
     🔊 RING ON
 </button>
 
+
 <button
     class="btn"
     data-matia-notifications
@@ -1165,19 +1759,24 @@ MATIA // SECURITY CHECK
     🔔 ENABLE NOTIFICATIONS
 </button>
 
+
 <span class="online">
     ● SYSTEM ONLINE
 </span>
 
+
 </div>
 
+
 </nav>
+
 
 <main class="container">
 
 {{ body|safe }}
 
 </main>
+
 
 <footer class="footer">
 
@@ -1186,14 +1785,18 @@ MATIA // SECURITY CHECK
 
 </footer>
 
+
 {{ scripts|safe }}
 
+
 {{ notification_script|safe }}
+
 
 </body>
 
 </html>
 """
+
 
     return render_template_string(
         template,
@@ -1213,8 +1816,6 @@ MATIA // SECURITY CHECK
 @app.route("/")
 def home():
 
-    admin_button = ""
-
     if is_admin():
 
         admin_button = """
@@ -1224,7 +1825,26 @@ def home():
 >
     ADMIN CONSOLE
 </a>
+
+<a
+    class="btn danger"
+    href="/admin/logout"
+>
+    LOGOUT
+</a>
 """
+
+    else:
+
+        admin_button = """
+<a
+    class="btn"
+    href="/auth/google"
+>
+    ADMIN LOGIN
+</a>
+"""
+
 
     body = """
 <section class="hero">
@@ -1233,10 +1853,12 @@ def home():
     AUTHORIZED SECURITY PLATFORM
 </div>
 
+
 <h1>
     MATIA <span>//</span><br>
     SECURITY CHECK
 </h1>
+
 
 <p>
     Professional security assessment request platform
@@ -1245,7 +1867,9 @@ def home():
     assessment status.
 </p>
 
+
 <div class="actions">
+
 
 <a
     class="btn primary"
@@ -1254,64 +1878,86 @@ def home():
     + NEW SECURITY REQUEST
 </a>
 
-""" + admin_button + """
+
+%s
+
 
 </div>
+
 
 </section>
 
 
 <div class="grid">
 
+
 <div class="card">
 
-<h3>01 · REQUEST</h3>
+<h3>
+01 · REQUEST
+</h3>
+
 
 <p class="muted">
 Submit an authorized security assessment request
 with a defined scope.
 </p>
 
+
 </div>
 
 
 <div class="card">
 
-<h3>02 · REVIEW</h3>
+<h3>
+02 · REVIEW
+</h3>
+
 
 <p class="muted">
 The administrator reviews and accepts or declines
 the request.
 </p>
 
+
 </div>
 
 
 <div class="card">
 
-<h3>03 · ASSESS</h3>
+<h3>
+03 · ASSESS
+</h3>
+
 
 <p class="muted">
 Findings and evidence can be documented inside
 the assessment workspace.
 </p>
 
+
 </div>
 
 
 <div class="card">
 
-<h3>04 · REPORT</h3>
+<h3>
+04 · REPORT
+</h3>
+
 
 <p class="muted">
 Completed findings can be exported as a
 professional security report.
 </p>
 
-</div>
 
 </div>
-"""
+
+
+</div>
+""" % admin_button
+
 
     return page(
         "Home",
@@ -1331,6 +1977,7 @@ def create_request():
 
     error = ""
 
+
     if request.method == "POST":
 
         name = request.form.get(
@@ -1338,24 +1985,29 @@ def create_request():
             "",
         ).strip()
 
+
         email = request.form.get(
             "email",
             "",
         ).strip()
+
 
         target = request.form.get(
             "target",
             "",
         ).strip()
 
+
         scope = request.form.get(
             "scope",
             "",
         ).strip()
 
+
         authorized = request.form.get(
             "authorized"
         )
+
 
         if (
             not name
@@ -1368,19 +2020,24 @@ def create_request():
                 "All fields are required."
             )
 
+
         elif authorized != "yes":
 
             error = (
                 "You must confirm authorization."
             )
 
+
         else:
 
-            target_ip = resolve_target_ip(
-                target
-            )
+            target_ip =
+                resolve_target_ip(
+                    target
+                )
+
 
             conn = db()
+
 
             cur = conn.execute(
                 """
@@ -1409,10 +2066,15 @@ def create_request():
                 ),
             )
 
-            request_id = cur.lastrowid
+
+            request_id =
+                cur.lastrowid
+
 
             conn.commit()
+
             conn.close()
+
 
             return redirect(
                 url_for(
@@ -1424,6 +2086,7 @@ def create_request():
 
     error_html = ""
 
+
     if error:
 
         error_html = """
@@ -1434,20 +2097,30 @@ def create_request():
 
 
     body = """
-<h1>New Security Request</h1>
+<h1>
+New Security Request
+</h1>
+
 
 <p class="muted">
 Submit only systems you own or have explicit permission
 to assess.
 </p>
 
+
 %s
+
 
 <div class="card">
 
+
 <form method="post">
 
-<label>Name</label>
+
+<label>
+Name
+</label>
+
 
 <input
     name="name"
@@ -1455,7 +2128,11 @@ to assess.
     autocomplete="name"
 >
 
-<label>Email</label>
+
+<label>
+Email
+</label>
+
 
 <input
     name="email"
@@ -1464,7 +2141,11 @@ to assess.
     autocomplete="email"
 >
 
-<label>Target</label>
+
+<label>
+Target
+</label>
+
 
 <input
     name="target"
@@ -1472,7 +2153,11 @@ to assess.
     required
 >
 
-<label>Authorized Scope</label>
+
+<label>
+Authorized Scope
+</label>
+
 
 <textarea
     name="scope"
@@ -1480,7 +2165,9 @@ to assess.
     required
 ></textarea>
 
+
 <label>
+
 
 <input
     type="checkbox"
@@ -1490,11 +2177,15 @@ to assess.
     style="width:auto"
 >
 
+
 I confirm that I am authorized to request this assessment.
+
 
 </label>
 
+
 <div class="actions">
+
 
 <button
     class="btn primary"
@@ -1503,6 +2194,7 @@ I confirm that I am authorized to request this assessment.
     SUBMIT REQUEST
 </button>
 
+
 <a
     class="btn"
     href="/"
@@ -1510,12 +2202,16 @@ I confirm that I am authorized to request this assessment.
     CANCEL
 </a>
 
+
 </div>
+
 
 </form>
 
+
 </div>
 """ % error_html
+
 
     return page(
         "New Request",
@@ -1532,43 +2228,58 @@ I confirm that I am authorized to request this assessment.
 )
 def client_status(request_id):
 
-    req = get_request(request_id)
+    req =
+        get_request(
+            request_id
+        )
+
 
     if not req:
+
         return (
             "Request not found",
             404,
         )
 
-    status, description, css = status_info(
-        req["status"]
-    )
+
+    status, description, css =
+        status_info(
+            req["status"]
+        )
+
 
     conn = db()
 
-    messages = conn.execute(
-        """
-        SELECT *
-        FROM messages
-        WHERE request_id = ?
-        ORDER BY id ASC
-        """,
-        (request_id,),
-    ).fetchall()
 
-    findings = conn.execute(
-        """
-        SELECT *
-        FROM findings
-        WHERE request_id = ?
-        ORDER BY id ASC
-        """,
-        (request_id,),
-    ).fetchall()
+    messages =
+        conn.execute(
+            """
+            SELECT *
+            FROM messages
+            WHERE request_id = ?
+            ORDER BY id ASC
+            """,
+            (request_id,),
+        ).fetchall()
+
+
+    findings =
+        conn.execute(
+            """
+            SELECT *
+            FROM findings
+            WHERE request_id = ?
+            ORDER BY id ASC
+            """,
+            (request_id,),
+        ).fetchall()
+
 
     conn.close()
 
+
     message_html = ""
+
 
     for msg in messages:
 
@@ -1577,6 +2288,7 @@ def client_status(request_id):
             if msg["sender"] == "matia"
             else "client"
         )
+
 
         message_html += """
 <div class="message %s">
@@ -1600,10 +2312,17 @@ def client_status(request_id):
 </div>
 """ % (
             cls,
-            esc(msg["sender"].upper()),
-            esc(msg["created"]),
-            nl2br(msg["message"]),
+            esc(
+                msg["sender"].upper()
+            ),
+            esc(
+                msg["created"]
+            ),
+            nl2br(
+                msg["message"]
+            ),
         )
+
 
     if not message_html:
 
@@ -1613,58 +2332,103 @@ No messages yet.
 </div>
 """
 
+
     findings_html = ""
+
 
     for finding in findings:
 
         severity = esc(
-            finding["severity"].upper()
+            finding[
+                "severity"
+            ].upper()
         )
+
 
         findings_html += """
 <div class="finding">
 
+
 <div class="message-meta">
+
 
 <strong>
 %s
 </strong>
 
-<span class="severity %s">
+
+<span
+    class="severity %s"
+>
 %s
 </span>
 
+
 </div>
+
 
 <h3>
 %s
 </h3>
 
-<p>
-<strong>Evidence</strong><br>
-%s
-</p>
 
 <p>
-<strong>Impact</strong><br>
+<strong>
+Evidence
+</strong>
+
+<br>
+
 %s
+
 </p>
 
+
 <p>
-<strong>Recommendation</strong><br>
+<strong>
+Impact
+</strong>
+
+<br>
+
 %s
+
 </p>
+
+
+<p>
+<strong>
+Recommendation
+</strong>
+
+<br>
+
+%s
+
+</p>
+
 
 </div>
 """ % (
-            esc(finding["code"]),
+            esc(
+                finding["code"]
+            ),
             severity,
             severity,
-            esc(finding["title"]),
-            nl2br(finding["evidence"]),
-            nl2br(finding["impact"]),
-            nl2br(finding["recommendation"]),
+            esc(
+                finding["title"]
+            ),
+            nl2br(
+                finding["evidence"]
+            ),
+            nl2br(
+                finding["impact"]
+            ),
+            nl2br(
+                finding["recommendation"]
+            ),
         )
+
 
     if not findings_html:
 
@@ -1674,12 +2438,16 @@ No findings published yet.
 </div>
 """
 
+
     scripts = """
 <script>
 
 let lastMessageId = 0;
+
 let firstClientPoll = true;
+
 let lastStatus = %r;
+
 
 async function checkClientNotifications() {
 
@@ -1693,8 +2461,10 @@ async function checkClientNotifications() {
                 }
             );
 
+
         const data =
             await response.json();
+
 
         if (firstClientPoll) {
 
@@ -1705,10 +2475,12 @@ async function checkClientNotifications() {
                 data.status ||
                 lastStatus;
 
-            firstClientPoll = false;
+            firstClientPoll =
+                false;
 
             return;
         }
+
 
         if (
             data.latest_id &&
@@ -1721,7 +2493,9 @@ async function checkClientNotifications() {
             lastMessageId =
                 data.latest_id;
 
+
             matiaRing();
+
 
             matiaDesktopNotification(
                 "🔔 MATIA // SECURITY CHECK",
@@ -1729,8 +2503,10 @@ async function checkClientNotifications() {
                 "You received a new message."
             );
 
+
             location.reload();
         }
+
 
         if (
             data.status &&
@@ -1740,7 +2516,9 @@ async function checkClientNotifications() {
             lastStatus =
                 data.status;
 
+
             matiaRing();
+
 
             matiaDesktopNotification(
                 "⚡ Assessment Status Updated",
@@ -1748,20 +2526,25 @@ async function checkClientNotifications() {
                 data.status
             );
 
+
             location.reload();
         }
+
 
     } catch (e) {
 
         console.log(e);
 
     }
+
 }
+
 
 setInterval(
     checkClientNotifications,
     2500
 );
+
 
 checkClientNotifications();
 
@@ -1771,90 +2554,113 @@ checkClientNotifications();
         request_id,
     )
 
+
     body = """
 <div
     class="actions"
     style="justify-content:space-between"
 >
 
+
 <div>
+
 
 <div class="muted">
 SECURITY REQUEST #%s
 </div>
 
+
 <h1 style="margin:5px 0">
 Client Workspace
 </h1>
 
+
 </div>
+
 
 <span class="badge %s">
 %s
 </span>
 
+
 </div>
 
 
 <div class="grid">
 
+
 <div class="card">
+
 
 <div class="muted">
 TARGET
 </div>
 
+
 <h3>
 %s
 </h3>
+
 
 <div class="muted">
 Resolved IP
 </div>
 
+
 <div>
 %s
 </div>
+
 
 </div>
 
 
 <div class="card">
+
 
 <div class="muted">
 STATUS
 </div>
 
+
 <div class="stat">
 %s
 </div>
 
+
 <p class="muted">
 %s
 </p>
+
 
 </div>
 
 
 <div class="card">
 
+
 <div class="muted">
 CREATED
 </div>
+
 
 <h3>
 %s
 </h3>
 
+
 <div class="muted">
 Request ID
 </div>
+
 
 <strong>
 #%s
 </strong>
 
+
 </div>
+
 
 </div>
 
@@ -1864,13 +2670,16 @@ Request ID
 
 <div class="card">
 
+
 <h2>
 Authorized Scope
 </h2>
 
+
 <p class="muted">
 %s
 </p>
+
 
 </div>
 
@@ -1880,22 +2689,29 @@ Authorized Scope
 
 <div class="grid">
 
+
 <div class="card">
+
 
 <h2>
 Secure Chat
 </h2>
 
+
 <div class="message-list">
+
 
 %s
 
+
 </div>
+
 
 <form
     method="post"
     action="/status/%s/message"
 >
+
 
 <textarea
     name="message"
@@ -1903,7 +2719,9 @@ Secure Chat
     required
 ></textarea>
 
+
 <div class="actions">
+
 
 <button
     class="btn primary"
@@ -1912,22 +2730,29 @@ Secure Chat
 SEND MESSAGE
 </button>
 
+
 </div>
 
+
 </form>
+
 
 </div>
 
 
 <div class="card">
 
+
 <h2>
 Security Findings
 </h2>
 
+
 %s
 
+
 </div>
+
 
 </div>
 """ % (
@@ -1949,6 +2774,7 @@ Security Findings
         findings_html,
     )
 
+
     return page(
         "Request #%s" % request_id,
         body,
@@ -1966,24 +2792,31 @@ Security Findings
 )
 def client_message(request_id):
 
-    req = get_request(
-        request_id
-    )
+    req =
+        get_request(
+            request_id
+        )
+
 
     if not req:
+
         return (
             "Request not found",
             404,
         )
 
-    message = request.form.get(
-        "message",
-        "",
-    ).strip()
+
+    message =
+        request.form.get(
+            "message",
+            "",
+        ).strip()
+
 
     if message:
 
         conn = db()
+
 
         conn.execute(
             """
@@ -2008,8 +2841,11 @@ def client_message(request_id):
             ),
         )
 
+
         conn.commit()
+
         conn.close()
+
 
     return redirect(
         url_for(
@@ -2020,7 +2856,7 @@ def client_message(request_id):
 
 
 # =========================================================
-# CLIENT APIS
+# CLIENT STATUS API
 # =========================================================
 
 @app.route(
@@ -2028,7 +2864,11 @@ def client_message(request_id):
 )
 def client_status_api(request_id):
 
-    req = get_request(request_id)
+    req =
+        get_request(
+            request_id
+        )
+
 
     if not req:
 
@@ -2037,14 +2877,29 @@ def client_status_api(request_id):
             "error": "not_found",
         }), 404
 
+
     return jsonify({
+
         "ok": True,
-        "id": req["id"],
-        "status": req["status"],
-        "target": req["target"],
-        "target_ip": req["target_ip"],
+
+        "id":
+            req["id"],
+
+        "status":
+            req["status"],
+
+        "target":
+            req["target"],
+
+        "target_ip":
+            req["target_ip"],
+
     })
 
+
+# =========================================================
+# CLIENT MESSAGES API
+# =========================================================
 
 @app.route(
     "/api/client/<int:request_id>/messages"
@@ -2053,19 +2908,22 @@ def client_messages_api(request_id):
 
     conn = db()
 
-    rows = conn.execute(
-        """
-        SELECT
-            id,
-            sender,
-            message,
-            created
-        FROM messages
-        WHERE request_id = ?
-        ORDER BY id ASC
-        """,
-        (request_id,),
-    ).fetchall()
+
+    rows =
+        conn.execute(
+            """
+            SELECT
+                id,
+                sender,
+                message,
+                created
+            FROM messages
+            WHERE request_id = ?
+            ORDER BY id ASC
+            """,
+            (request_id,),
+        ).fetchall()
+
 
     conn.execute(
         """
@@ -2077,16 +2935,25 @@ def client_messages_api(request_id):
         (request_id,),
     )
 
+
     conn.commit()
+
     conn.close()
 
+
     return jsonify({
+
         "messages": [
             dict(row)
             for row in rows
         ]
+
     })
 
+
+# =========================================================
+# CLIENT NOTIFICATIONS API
+# =========================================================
 
 @app.route(
     "/api/client/<int:request_id>/notifications"
@@ -2095,27 +2962,33 @@ def client_notifications(request_id):
 
     conn = db()
 
-    req = conn.execute(
-        """
-        SELECT *
-        FROM requests
-        WHERE id = ?
-        """,
-        (request_id,),
-    ).fetchone()
 
-    latest = conn.execute(
-        """
-        SELECT *
-        FROM messages
-        WHERE request_id = ?
-        ORDER BY id DESC
-        LIMIT 1
-        """,
-        (request_id,),
-    ).fetchone()
+    req =
+        conn.execute(
+            """
+            SELECT *
+            FROM requests
+            WHERE id = ?
+            """,
+            (request_id,),
+        ).fetchone()
+
+
+    latest =
+        conn.execute(
+            """
+            SELECT *
+            FROM messages
+            WHERE request_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (request_id,),
+        ).fetchone()
+
 
     conn.close()
+
 
     if not req:
 
@@ -2123,21 +2996,29 @@ def client_notifications(request_id):
             "ok": False
         }), 404
 
+
     return jsonify({
+
         "ok": True,
-        "status": req["status"],
+
+        "status":
+            req["status"],
+
         "latest_id":
             latest["id"]
             if latest
             else 0,
+
         "latest_sender":
             latest["sender"]
             if latest
             else None,
+
         "latest_message":
             latest["message"]
             if latest
             else "",
+
     })
 
 
@@ -2145,36 +3026,37 @@ def client_notifications(request_id):
 # GOOGLE LOGIN
 # =========================================================
 
-@app.route("/auth/google")
+@app.route(
+    "/auth/google"
+)
 def google_login():
 
     if (
         not GOOGLE_CLIENT_ID
-        or not GOOGLE_CLIENT_SECRET
+        or
+        not GOOGLE_CLIENT_SECRET
     ):
 
-        body = """
-<div
-    style="
-        max-width:650px;
-        margin:60px auto
-    "
->
-
+        return page(
+            "OAuth Configuration",
+            """
 <div class="card">
 
 <div class="badge declined">
 CONFIGURATION ERROR
 </div>
 
+
 <h1>
 Google Authentication Not Configured
 </h1>
 
+
 <p class="muted">
-Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET
-in the server environment.
+GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET
+must be configured on Render.
 </p>
+
 
 <a
     class="btn"
@@ -2184,19 +3066,16 @@ RETURN HOME
 </a>
 
 </div>
-
-</div>
-"""
-
-        return page(
-            "OAuth Configuration",
-            body,
+""",
         ), 500
 
-    redirect_uri = url_for(
-        "google_callback",
-        _external=True,
-    )
+
+    redirect_uri =
+        url_for(
+            "google_callback",
+            _external=True
+        )
+
 
     return google.authorize_redirect(
         redirect_uri
@@ -2214,52 +3093,69 @@ def google_callback():
 
     try:
 
-        token = google.authorize_access_token()
+        token =
+            google.authorize_access_token()
 
-        user = google.userinfo(
-            token=token
-        )
+
+        response =
+            google.get(
+                "https://openidconnect.googleapis.com/v1/userinfo",
+                token=token,
+            )
+
+
+        user =
+            response.json()
+
 
         email = (
             user.get("email")
             or ""
         ).strip().lower()
 
-        email_verified = user.get(
-            "email_verified",
-            True,
-        )
+
+        email_verified =
+            user.get(
+                "email_verified",
+                False,
+            )
+
 
         if isinstance(
             email_verified,
             str,
         ):
-            email_verified = (
-                email_verified.lower()
-                == "true"
-            )
+
+            email_verified =
+                email_verified.lower() == "true"
+
 
         print(
-            "GOOGLE LOGIN EMAIL:",
+            "GOOGLE EMAIL:",
             email,
         )
 
+
         print(
-            "EMAIL VERIFIED:",
+            "GOOGLE VERIFIED:",
             email_verified,
         )
+
 
         print(
             "EMAIL ALLOWED:",
             email in ALLOWED_ADMIN_EMAILS,
         )
 
+
         if (
             email not in ALLOWED_ADMIN_EMAILS
-            or not email_verified
+            or
+            not email_verified
         ):
 
             session.clear()
+
 
             return page(
                 "Access Denied",
@@ -2270,14 +3166,26 @@ def google_callback():
 ACCESS DENIED
 </div>
 
+
 <h1>
 Administrator Access Denied
 </h1>
+
 
 <p class="muted">
 This Google account is not authorized
 to access the MATIA administrator console.
 </p>
+
+
+<p class="muted">
+Authorized administrators:
+<br>
+kleimatia1@gmail.com
+<br>
+vantyx199@gmail.com
+</p>
+
 
 <a
     class="btn"
@@ -2290,28 +3198,37 @@ RETURN HOME
 """,
             ), 403
 
+
         session.clear()
 
-        session["admin_logged_in"] = True
-        session["admin_email"] = email
+
+        session["admin_logged_in"] =
+            True
+
+
+        session["admin_email"] =
+            email
+
+
         session["admin_name"] = (
             user.get("name")
             or user.get("given_name")
             or email
         )
 
-        session.permanent = True
 
         print(
             "ADMIN LOGIN SUCCESS:",
             email,
         )
 
+
         return redirect(
             url_for(
                 "admin_dashboard"
             )
         )
+
 
     except Exception as e:
 
@@ -2320,7 +3237,9 @@ RETURN HOME
             repr(e),
         )
 
+
         session.clear()
+
 
         return page(
             "Authentication Error",
@@ -2331,14 +3250,17 @@ RETURN HOME
 AUTHENTICATION ERROR
 </div>
 
+
 <h1>
 Google Authentication Failed
 </h1>
+
 
 <p class="muted">
 The Google authentication process could not
 be completed.
 </p>
+
 
 <a
     class="btn"
@@ -2364,55 +3286,71 @@ def admin_notifications():
 
     conn = db()
 
-    latest = conn.execute(
-        """
-        SELECT
-            m.*,
-            r.name,
-            r.target
-        FROM messages m
-        JOIN requests r
-            ON r.id = m.request_id
-        WHERE m.sender = 'client'
-        ORDER BY m.id DESC
-        LIMIT 1
-        """
-    ).fetchone()
 
-    unread = conn.execute(
-        """
-        SELECT COUNT(*)
-        FROM messages
-        WHERE sender = 'client'
-        AND read_by_admin = 0
-        """
-    ).fetchone()[0]
+    latest =
+        conn.execute(
+            """
+            SELECT
+                m.*,
+                r.name,
+                r.target
+            FROM messages m
+            JOIN requests r
+                ON r.id = m.request_id
+            WHERE m.sender = 'client'
+            ORDER BY m.id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+
+
+    unread =
+        conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM messages
+            WHERE sender = 'client'
+            AND read_by_admin = 0
+            """
+        ).fetchone()[0]
+
 
     conn.close()
 
+
     return jsonify({
-        "ok": True,
-        "unread": unread,
+
+        "ok":
+            True,
+
+        "unread":
+            unread,
+
         "latest_id":
             latest["id"]
             if latest
             else 0,
+
         "latest_sender":
             latest["sender"]
             if latest
             else None,
+
         "latest_message":
             latest["message"]
             if latest
             else "",
+
         "client_name":
             latest["name"]
             if latest
             else "",
+
         "target":
             latest["target"]
             if latest
             else "",
+
     })
 
 
@@ -2420,21 +3358,27 @@ def admin_notifications():
 # ADMIN DASHBOARD
 # =========================================================
 
-@app.route("/admin")
+@app.route(
+    "/admin"
+)
 @admin_required
 def admin_dashboard():
 
     conn = db()
 
-    requests_rows = conn.execute(
-        """
-        SELECT *
-        FROM requests
-        ORDER BY id DESC
-        """
-    ).fetchall()
+
+    requests_rows =
+        conn.execute(
+            """
+            SELECT *
+            FROM requests
+            ORDER BY id DESC
+            """
+        ).fetchall()
+
 
     stats = {}
+
 
     for status in (
         "PENDING",
@@ -2443,24 +3387,30 @@ def admin_dashboard():
         "COMPLETED",
     ):
 
-        stats[status] = conn.execute(
-            """
-            SELECT COUNT(*)
-            FROM requests
-            WHERE status = ?
-            """,
-            (status,),
-        ).fetchone()[0]
+        stats[status] =
+            conn.execute(
+                """
+                SELECT COUNT(*)
+                FROM requests
+                WHERE status = ?
+                """,
+                (status,),
+            ).fetchone()[0]
+
 
     conn.close()
 
+
     rows_html = ""
+
 
     for req in requests_rows:
 
-        _, _, css = status_info(
-            req["status"]
-        )
+        _, _, css =
+            status_info(
+                req["status"]
+            )
+
 
         rows_html += """
 <tr>
@@ -2468,6 +3418,7 @@ def admin_dashboard():
 <td>
 #%s
 </td>
+
 
 <td>
 
@@ -2483,6 +3434,7 @@ def admin_dashboard():
 
 </td>
 
+
 <td>
 
 %s
@@ -2495,6 +3447,7 @@ def admin_dashboard():
 
 </td>
 
+
 <td>
 
 <span class="badge %s">
@@ -2503,9 +3456,11 @@ def admin_dashboard():
 
 </td>
 
+
 <td>
 %s
 </td>
+
 
 <td>
 
@@ -2513,7 +3468,7 @@ def admin_dashboard():
     class="btn"
     href="/admin/request/%s"
 >
-    OPEN
+OPEN
 </a>
 
 </td>
@@ -2534,6 +3489,7 @@ def admin_dashboard():
             req["id"],
         )
 
+
     if not rows_html:
 
         rows_html = """
@@ -2549,11 +3505,14 @@ No requests yet.
 </tr>
 """
 
+
     scripts = r"""
 <script>
 
 let adminLastMessageId = 0;
+
 let adminFirstPoll = true;
+
 
 async function adminNotificationPoll() {
 
@@ -2563,22 +3522,32 @@ async function adminNotificationPoll() {
             await fetch(
                 "/api/admin/notifications",
                 {
-                    cache: "no-store"
+                    cache:
+                        "no-store"
                 }
             );
+
 
         const data =
             await response.json();
 
-        if (adminFirstPoll) {
+
+        if (
+            adminFirstPoll
+        ) {
 
             adminLastMessageId =
                 data.latest_id || 0;
 
-            adminFirstPoll = false;
+
+            adminFirstPoll =
+                false;
+
 
             return;
+
         }
+
 
         if (
             data.latest_id &&
@@ -2589,7 +3558,9 @@ async function adminNotificationPoll() {
             adminLastMessageId =
                 data.latest_id;
 
+
             matiaRing();
+
 
             matiaDesktopNotification(
                 "🔔 MATIA // SECURITY CHECK",
@@ -2600,25 +3571,32 @@ async function adminNotificationPoll() {
                 " sent a new message."
             );
 
+
             location.reload();
+
         }
+
 
     } catch (e) {
 
         console.log(e);
 
     }
+
 }
+
 
 setInterval(
     adminNotificationPoll,
     2500
 );
 
+
 adminNotificationPoll();
 
 </script>
 """
+
 
     admin_name = (
         session.get(
@@ -2632,29 +3610,37 @@ adminNotificationPoll();
         "Administrator"
     )
 
+
     body = """
 <div
     class="actions"
     style="justify-content:space-between"
 >
 
+
 <div>
+
 
 <div class="badge completed">
 ADMIN CONSOLE
 </div>
 
+
 <h1>
 Security Requests
 </h1>
+
 
 <p class="muted">
 Welcome, %s.
 </p>
 
+
 </div>
 
+
 <div class="actions">
+
 
 <a
     class="btn"
@@ -2663,63 +3649,79 @@ Welcome, %s.
 LOGOUT
 </a>
 
+
 </div>
+
 
 </div>
 
 
 <div class="grid">
 
+
 <div class="card">
+
 
 <div class="muted">
 PENDING
 </div>
 
+
 <div class="stat">
 %s
 </div>
+
 
 </div>
 
 
 <div class="card">
+
 
 <div class="muted">
 ACCEPTED
 </div>
 
+
 <div class="stat">
 %s
 </div>
+
 
 </div>
 
 
 <div class="card">
+
 
 <div class="muted">
 COMPLETED
 </div>
 
+
 <div class="stat">
 %s
 </div>
+
 
 </div>
 
 
 <div class="card">
 
+
 <div class="muted">
 DECLINED
 </div>
+
 
 <div class="stat">
 %s
 </div>
 
+
 </div>
+
 
 </div>
 
@@ -2729,22 +3731,44 @@ DECLINED
 
 <div class="card">
 
+
 <div class="table-wrap">
+
 
 <table>
 
+
 <thead>
+
 
 <tr>
 
-<th>ID</th>
-<th>CLIENT</th>
-<th>TARGET</th>
-<th>STATUS</th>
-<th>CREATED</th>
-<th>ACTION</th>
+<th>
+ID
+</th>
+
+<th>
+CLIENT
+</th>
+
+<th>
+TARGET
+</th>
+
+<th>
+STATUS
+</th>
+
+<th>
+CREATED
+</th>
+
+<th>
+ACTION
+</th>
 
 </tr>
+
 
 </thead>
 
@@ -2755,9 +3779,12 @@ DECLINED
 
 </tbody>
 
+
 </table>
 
+
 </div>
+
 
 </div>
 """ % (
@@ -2768,6 +3795,7 @@ DECLINED
         stats["DECLINED"],
         rows_html,
     )
+
 
     return page(
         "Admin",
@@ -2787,21 +3815,27 @@ DECLINED
 @admin_required
 def admin_request(request_id):
 
-    req = get_request(
-        request_id
-    )
+    req =
+        get_request(
+            request_id
+        )
+
 
     if not req:
+
         return (
             "Request not found",
             404,
         )
 
+
     if request.method == "POST":
 
-        action = request.form.get(
-            "action"
-        )
+        action =
+            request.form.get(
+                "action"
+            )
+
 
         allowed = {
             "ACCEPTED",
@@ -2809,9 +3843,11 @@ def admin_request(request_id):
             "COMPLETED",
         }
 
+
         if action in allowed:
 
             conn = db()
+
 
             conn.execute(
                 """
@@ -2825,34 +3861,44 @@ def admin_request(request_id):
                 ),
             )
 
+
             conn.commit()
+
             conn.close()
 
-            req = get_request(
-                request_id
-            )
+
+            req =
+                get_request(
+                    request_id
+                )
+
 
     conn = db()
 
-    messages = conn.execute(
-        """
-        SELECT *
-        FROM messages
-        WHERE request_id = ?
-        ORDER BY id ASC
-        """,
-        (request_id,),
-    ).fetchall()
 
-    findings = conn.execute(
-        """
-        SELECT *
-        FROM findings
-        WHERE request_id = ?
-        ORDER BY id DESC
-        """,
-        (request_id,),
-    ).fetchall()
+    messages =
+        conn.execute(
+            """
+            SELECT *
+            FROM messages
+            WHERE request_id = ?
+            ORDER BY id ASC
+            """,
+            (request_id,),
+        ).fetchall()
+
+
+    findings =
+        conn.execute(
+            """
+            SELECT *
+            FROM findings
+            WHERE request_id = ?
+            ORDER BY id DESC
+            """,
+            (request_id,),
+        ).fetchall()
+
 
     conn.execute(
         """
@@ -2864,49 +3910,71 @@ def admin_request(request_id):
         (request_id,),
     )
 
+
     conn.commit()
+
     conn.close()
 
-    status, description, css = status_info(
-        req["status"]
-    )
+
+    status, description, css =
+        status_info(
+            req["status"]
+        )
+
 
     message_html = ""
+
 
     for msg in messages:
 
         cls = (
             "client"
-            if msg["sender"] == "client"
-            else "admin"
+            if msg["sender"] ==
+            "client"
+            else
+            "admin"
         )
+
 
         message_html += """
 <div class="message %s">
 
+
 <div class="message-meta">
 
-<span>
-%s
-</span>
 
 <span>
 %s
 </span>
+
+
+<span>
+%s
+</span>
+
 
 </div>
+
 
 <div>
 %s
 </div>
 
+
 </div>
 """ % (
             cls,
-            esc(msg["sender"].upper()),
-            esc(msg["created"]),
-            nl2br(msg["message"]),
+            esc(
+                msg["sender"].upper()
+            ),
+            esc(
+                msg["created"]
+            ),
+            nl2br(
+                msg["message"]
+            ),
         )
+
 
     if not message_html:
 
@@ -2916,67 +3984,107 @@ No messages.
 </div>
 """
 
+
     findings_html = ""
+
 
     for finding in findings:
 
-        severity = esc(
-            finding["severity"].upper()
-        )
+        severity =
+            esc(
+                finding[
+                    "severity"
+                ].upper()
+            )
+
 
         findings_html += """
 <div class="finding">
 
+
 <div class="message-meta">
+
 
 <strong>
 %s
 </strong>
 
-<span class="severity %s">
+
+<span
+    class="severity %s"
+>
 %s
 </span>
 
+
 </div>
+
 
 <h3>
 %s
 </h3>
 
+
 <p>
+
 <strong>
 Evidence
 </strong>
+
 <br>
+
 %s
+
 </p>
 
+
 <p>
+
 <strong>
 Impact
 </strong>
+
 <br>
+
 %s
+
 </p>
 
+
 <p>
+
 <strong>
 Recommendation
 </strong>
+
 <br>
+
 %s
+
 </p>
+
 
 </div>
 """ % (
-            esc(finding["code"]),
+            esc(
+                finding["code"]
+            ),
             severity,
             severity,
-            esc(finding["title"]),
-            nl2br(finding["evidence"]),
-            nl2br(finding["impact"]),
-            nl2br(finding["recommendation"]),
+            esc(
+                finding["title"]
+            ),
+            nl2br(
+                finding["evidence"]
+            ),
+            nl2br(
+                finding["impact"]
+            ),
+            nl2br(
+                finding["recommendation"]
+            ),
         )
+
 
     if not findings_html:
 
@@ -2986,21 +4094,26 @@ No findings added yet.
 </div>
 """
 
+
     body = """
 <div
     class="actions"
     style="justify-content:space-between"
 >
 
+
 <div>
+
 
 <div class="muted">
 REQUEST #%s
 </div>
 
+
 <h1>
 %s
 </h1>
+
 
 </div>
 
@@ -3009,65 +4122,85 @@ REQUEST #%s
 %s
 </span>
 
+
 </div>
 
 
 <div class="grid">
 
+
 <div class="card">
+
 
 <h3>
 Client
 </h3>
 
+
 <p>
+
 
 <strong>
 %s
 </strong>
 
+
 <br>
+
 
 %s
 
+
 </p>
+
 
 </div>
 
 
 <div class="card">
+
 
 <h3>
 Target
 </h3>
 
+
 <p>
+
 
 <strong>
 %s
 </strong>
 
+
 <br>
+
 
 IP:
 %s
 
+
 </p>
+
 
 </div>
 
 
 <div class="card">
+
 
 <h3>
 Created
 </h3>
 
+
 <p>
 %s
 </p>
 
+
 </div>
+
 
 </div>
 
@@ -3077,18 +4210,24 @@ Created
 
 <div class="card">
 
+
 <h2>
 Assessment Status
 </h2>
+
 
 <p class="muted">
 %s
 </p>
 
 
-<form method="post">
+<form
+    method="post"
+>
+
 
 <div class="actions">
+
 
 <button
     class="btn primary"
@@ -3119,9 +4258,12 @@ DECLINE
 MARK COMPLETED
 </button>
 
+
 </div>
 
+
 </form>
+
 
 </div>
 
@@ -3134,13 +4276,17 @@ MARK COMPLETED
 
 <div class="card">
 
+
 <h2>
 Client Chat
 </h2>
 
+
 <div class="message-list">
 
+
 %s
+
 
 </div>
 
@@ -3149,6 +4295,7 @@ Client Chat
     method="post"
     action="/admin/request/%s/message"
 >
+
 
 <textarea
     name="message"
@@ -3164,12 +4311,15 @@ Client Chat
 SEND MESSAGE
 </button>
 
+
 </form>
+
 
 </div>
 
 
 <div class="card">
+
 
 <h2>
 Add Finding
@@ -3186,6 +4336,7 @@ Add Finding
 Finding Code
 </label>
 
+
 <input
     name="code"
     placeholder="F-001"
@@ -3196,6 +4347,7 @@ Finding Code
 <label>
 Title
 </label>
+
 
 <input
     name="title"
@@ -3208,13 +4360,36 @@ Title
 Severity
 </label>
 
-<select name="severity">
 
-<option>INFO</option>
-<option>LOW</option>
-<option>MEDIUM</option>
-<option>HIGH</option>
-<option>CRITICAL</option>
+<select
+    name="severity"
+>
+
+
+<option>
+INFO
+</option>
+
+
+<option>
+LOW
+</option>
+
+
+<option>
+MEDIUM
+</option>
+
+
+<option>
+HIGH
+</option>
+
+
+<option>
+CRITICAL
+</option>
+
 
 </select>
 
@@ -3222,6 +4397,7 @@ Severity
 <label>
 Evidence
 </label>
+
 
 <textarea
     name="evidence"
@@ -3233,6 +4409,7 @@ Evidence
 Impact
 </label>
 
+
 <textarea
     name="impact"
     required
@@ -3242,6 +4419,7 @@ Impact
 <label>
 Recommendation
 </label>
+
 
 <textarea
     name="recommendation"
@@ -3256,9 +4434,12 @@ Recommendation
 ADD FINDING
 </button>
 
+
 </form>
 
+
 </div>
+
 
 </div>
 
@@ -3268,10 +4449,12 @@ ADD FINDING
 
 <div class="card">
 
+
 <div
     class="actions"
     style="justify-content:space-between"
 >
+
 
 <h2>
 Findings
@@ -3285,10 +4468,12 @@ Findings
 GENERATE REPORT
 </a>
 
+
 </div>
 
 
 %s
+
 
 </div>
 
@@ -3304,25 +4489,37 @@ GENERATE REPORT
 </a>
 """ % (
         req["id"],
-        esc(req["name"]),
+        esc(
+            req["name"]
+        ),
         css,
         esc(status),
-        esc(req["name"]),
-        esc(req["email"]),
-        esc(req["target"]),
+        esc(
+            req["name"]
+        ),
+        esc(
+            req["email"]
+        ),
+        esc(
+            req["target"]
+        ),
         esc(
             req["target_ip"]
-            or
-            "unresolved"
+            or "unresolved"
         ),
-        esc(req["created"]),
-        esc(description),
+        esc(
+            req["created"]
+        ),
+        esc(
+            description
+        ),
         message_html,
         request_id,
         request_id,
         request_id,
         findings_html,
     )
+
 
     return page(
         "Request #%s" % request_id,
@@ -3341,24 +4538,31 @@ GENERATE REPORT
 @admin_required
 def admin_message(request_id):
 
-    req = get_request(
-        request_id
-    )
+    req =
+        get_request(
+            request_id
+        )
+
 
     if not req:
+
         return (
             "Request not found",
             404,
         )
 
-    message = request.form.get(
-        "message",
-        "",
-    ).strip()
+
+    message =
+        request.form.get(
+            "message",
+            "",
+        ).strip()
+
 
     if message:
 
         conn = db()
+
 
         conn.execute(
             """
@@ -3383,8 +4587,11 @@ def admin_message(request_id):
             ),
         )
 
+
         conn.commit()
+
         conn.close()
+
 
     return redirect(
         url_for(
@@ -3406,19 +4613,22 @@ def admin_messages_api(request_id):
 
     conn = db()
 
-    rows = conn.execute(
-        """
-        SELECT
-            id,
-            sender,
-            message,
-            created
-        FROM messages
-        WHERE request_id = ?
-        ORDER BY id ASC
-        """,
-        (request_id,),
-    ).fetchall()
+
+    rows =
+        conn.execute(
+            """
+            SELECT
+                id,
+                sender,
+                message,
+                created
+            FROM messages
+            WHERE request_id = ?
+            ORDER BY id ASC
+            """,
+            (request_id,),
+        ).fetchall()
+
 
     conn.execute(
         """
@@ -3430,14 +4640,20 @@ def admin_messages_api(request_id):
         (request_id,),
     )
 
+
     conn.commit()
+
     conn.close()
 
+
     return jsonify({
-        "messages": [
-            dict(row)
-            for row in rows
-        ]
+
+        "messages":
+            [
+                dict(row)
+                for row in rows
+            ]
+
     })
 
 
@@ -3452,45 +4668,61 @@ def admin_messages_api(request_id):
 @admin_required
 def add_finding(request_id):
 
-    req = get_request(
-        request_id
-    )
+    req =
+        get_request(
+            request_id
+        )
+
 
     if not req:
+
         return (
             "Request not found",
             404,
         )
 
-    code = request.form.get(
-        "code",
-        "",
-    ).strip()
 
-    title = request.form.get(
-        "title",
-        "",
-    ).strip()
+    code =
+        request.form.get(
+            "code",
+            "",
+        ).strip()
 
-    severity = request.form.get(
-        "severity",
-        "INFO",
-    ).strip().upper()
 
-    evidence = request.form.get(
-        "evidence",
-        "",
-    ).strip()
+    title =
+        request.form.get(
+            "title",
+            "",
+        ).strip()
 
-    impact = request.form.get(
-        "impact",
-        "",
-    ).strip()
 
-    recommendation = request.form.get(
-        "recommendation",
-        "",
-    ).strip()
+    severity =
+        request.form.get(
+            "severity",
+            "INFO",
+        ).strip().upper()
+
+
+    evidence =
+        request.form.get(
+            "evidence",
+            "",
+        ).strip()
+
+
+    impact =
+        request.form.get(
+            "impact",
+            "",
+        ).strip()
+
+
+    recommendation =
+        request.form.get(
+            "recommendation",
+            "",
+        ).strip()
+
 
     allowed_severity = {
         "INFO",
@@ -3500,8 +4732,12 @@ def add_finding(request_id):
         "CRITICAL",
     }
 
+
     if severity not in allowed_severity:
-        severity = "INFO"
+
+        severity =
+            "INFO"
+
 
     if (
         code
@@ -3512,6 +4748,7 @@ def add_finding(request_id):
     ):
 
         conn = db()
+
 
         conn.execute(
             """
@@ -3538,8 +4775,11 @@ def add_finding(request_id):
             ),
         )
 
+
         conn.commit()
+
         conn.close()
+
 
     return redirect(
         url_for(
@@ -3559,31 +4799,40 @@ def add_finding(request_id):
 @admin_required
 def report(request_id):
 
-    req = get_request(
-        request_id
-    )
+    req =
+        get_request(
+            request_id
+        )
+
 
     if not req:
+
         return (
             "Request not found",
             404,
         )
 
+
     conn = db()
 
-    findings = conn.execute(
-        """
-        SELECT *
-        FROM findings
-        WHERE request_id = ?
-        ORDER BY id ASC
-        """,
-        (request_id,),
-    ).fetchall()
+
+    findings =
+        conn.execute(
+            """
+            SELECT *
+            FROM findings
+            WHERE request_id = ?
+            ORDER BY id ASC
+            """,
+            (request_id,),
+        ).fetchall()
+
 
     conn.close()
 
+
     findings_html = ""
+
 
     for finding in findings:
 
@@ -3600,37 +4849,69 @@ def report(request_id):
 </h3>
 
 <p>
-<strong>Severity:</strong>
+<strong>
+Severity:
+</strong>
+
 %s
+
 </p>
 
 <p>
-<strong>Evidence</strong>
+<strong>
+Evidence
+</strong>
+
 <br>
+
 %s
+
 </p>
 
 <p>
-<strong>Impact</strong>
+<strong>
+Impact
+</strong>
+
 <br>
+
 %s
+
 </p>
 
 <p>
-<strong>Recommendation</strong>
+<strong>
+Recommendation
+</strong>
+
 <br>
+
 %s
+
 </p>
 
 </section>
 """ % (
-            esc(finding["code"]),
-            esc(finding["title"]),
-            esc(finding["severity"]),
-            nl2br(finding["evidence"]),
-            nl2br(finding["impact"]),
-            nl2br(finding["recommendation"]),
+            esc(
+                finding["code"]
+            ),
+            esc(
+                finding["title"]
+            ),
+            esc(
+                finding["severity"]
+            ),
+            nl2br(
+                finding["evidence"]
+            ),
+            nl2br(
+                finding["impact"]
+            ),
+            nl2br(
+                finding["recommendation"]
+            ),
         )
+
 
     if not findings_html:
 
@@ -3640,68 +4921,103 @@ No findings have been documented.
 </p>
 """
 
+
     report_html = """
 <!doctype html>
 
 <html>
 
+
 <head>
 
+
 <meta charset="utf-8">
+
 
 <title>
 Security Assessment Report #%s
 </title>
 
+
 <style>
 
 body {
+
     font-family:
         Arial,
         Helvetica,
         sans-serif;
 
+
     max-width:
         900px;
+
 
     margin:
         50px auto;
 
+
     padding:
         20px;
+
 
     color:
         #17202a;
 
+
     line-height:
         1.6;
+
 }
+
 
 h1 {
-    margin-bottom:5px;
+
+    margin-bottom:
+        5px;
+
 }
 
+
 .meta {
-    color:#5d6d7e;
-    margin-bottom:35px;
+
+    color:
+        #5d6d7e;
+
+
+    margin-bottom:
+        35px;
+
 }
+
 
 @media print {
 
     body {
-        margin:20px;
+
+        margin:
+            20px;
+
     }
 
+
     .print {
-        display:none;
+
+        display:
+            none;
+
     }
+
 }
 
 </style>
 
+
 </head>
 
+
 <body>
+
 
 <button
     class="print"
@@ -3710,15 +5026,19 @@ h1 {
 PRINT / SAVE PDF
 </button>
 
+
 <h1>
 MATIA // SECURITY CHECK
 </h1>
+
 
 <h2>
 Authorized Security Assessment Report
 </h2>
 
+
 <div class="meta">
+
 
 <strong>
 Request:
@@ -3728,6 +5048,7 @@ Request:
 
 <br>
 
+
 <strong>
 Client:
 </strong>
@@ -3735,6 +5056,7 @@ Client:
 %s
 
 <br>
+
 
 <strong>
 Email:
@@ -3744,6 +5066,7 @@ Email:
 
 <br>
 
+
 <strong>
 Target:
 </strong>
@@ -3751,6 +5074,7 @@ Target:
 %s
 
 <br>
+
 
 <strong>
 Resolved IP:
@@ -3760,6 +5084,7 @@ Resolved IP:
 
 <br>
 
+
 <strong>
 Status:
 </strong>
@@ -3768,33 +5093,42 @@ Status:
 
 <br>
 
+
 <strong>
 Created:
 </strong>
 
 %s
 
+
 </div>
+
 
 <h2>
 Authorized Scope
 </h2>
 
+
 <p>
 %s
 </p>
+
 
 <h2>
 Findings
 </h2>
 
+
 %s
 
+
 <hr>
+
 
 <p class="meta">
 Generated by MATIA // SECURITY CHECK
 </p>
+
 
 </body>
 
@@ -3802,18 +5136,31 @@ Generated by MATIA // SECURITY CHECK
 """ % (
         req["id"],
         req["id"],
-        esc(req["name"]),
-        esc(req["email"]),
-        esc(req["target"]),
+        esc(
+            req["name"]
+        ),
+        esc(
+            req["email"]
+        ),
+        esc(
+            req["target"]
+        ),
         esc(
             req["target_ip"]
             or "Not resolved"
         ),
-        esc(req["status"]),
-        esc(req["created"]),
-        nl2br(req["scope"]),
+        esc(
+            req["status"]
+        ),
+        esc(
+            req["created"]
+        ),
+        nl2br(
+            req["scope"]
+        ),
         findings_html,
     )
+
 
     return report_html
 
@@ -3830,7 +5177,9 @@ def admin_logout():
     session.clear()
 
     return redirect(
-        url_for("home")
+        url_for(
+            "home"
+        )
     )
 
 
@@ -3838,9 +5187,15 @@ def admin_logout():
 # FAVICON
 # =========================================================
 
-@app.route("/favicon.ico")
+@app.route(
+    "/favicon.ico"
+)
 def favicon():
-    return "", 204
+
+    return (
+        "",
+        204,
+    )
 
 
 # =========================================================
@@ -3853,17 +5208,21 @@ def not_found(error):
     body = """
 <div class="card">
 
+
 <div class="badge declined">
 404
 </div>
+
 
 <h1>
 Page Not Found
 </h1>
 
+
 <p class="muted">
 The requested resource does not exist.
 </p>
+
 
 <a
     class="btn"
@@ -3872,8 +5231,10 @@ The requested resource does not exist.
 RETURN HOME
 </a>
 
+
 </div>
 """
+
 
     return page(
         "404",
@@ -3887,17 +5248,21 @@ def server_error(error):
     body = """
 <div class="card">
 
+
 <div class="badge declined">
 500
 </div>
+
 
 <h1>
 Server Error
 </h1>
 
+
 <p class="muted">
 An internal application error occurred.
 </p>
+
 
 <a
     class="btn"
@@ -3906,8 +5271,10 @@ An internal application error occurred.
 RETURN HOME
 </a>
 
+
 </div>
 """
+
 
     return page(
         "500",
@@ -3921,34 +5288,65 @@ RETURN HOME
 
 if __name__ == "__main__":
 
-    port = int(
-        os.environ.get(
-            "PORT",
-            "5000",
+    port =
+        int(
+            os.environ.get(
+                "PORT",
+                "5000",
+            )
         )
-    )
+
 
     print()
+
     print("=" * 62)
-    print("        MATIA // SECURITY CHECK")
+
+    print(
+        "        MATIA // SECURITY CHECK"
+    )
+
     print("=" * 62)
-    print(" Status : ONLINE")
-    print(" Host   : 0.0.0.0")
-    print(" Port   :", port)
-    print(" DB     :", DB_FILE)
-    print(" Admin  : Google OAuth")
-    print(" Access : Restricted")
+
+    print(
+        " Status : ONLINE"
+    )
+
+    print(
+        " Host   : 0.0.0.0"
+    )
+
+    print(
+        " Port   :",
+        port,
+    )
+
+    print(
+        " DB     :",
+        DB_FILE,
+    )
+
+    print(
+        " Admin  : Google OAuth"
+    )
+
+    print(
+        " Access : Restricted"
+    )
+
     print(
         " Admins : "
         "kleimatia1@gmail.com + "
         "vantyx199@gmail.com"
     )
+
     print("=" * 62)
+
     print()
+
 
     app.run(
         host="0.0.0.0",
         port=port,
         debug=False,
     )
-
+```
